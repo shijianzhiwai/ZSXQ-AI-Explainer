@@ -1,0 +1,58 @@
+.popup-container {
+  padding: 16px;
+  width: 300px;
+}
+
+.config-form {
+  margin: 16px 0;
+}
+
+.config-form label {
+  display: block;
+  margin-bottom: 8px;
+}
+
+.config-form input {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+}
+
+.config-form button {
+  background: #1890ff;
+  color: white;
+  border: none;
+  padding: 8px 16px;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.config-form button:hover {
+  background: #40a9ff;
+}
+
+.hint {
+  color: #666;
+  font-size: 14px;
+}
+
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.close-btn {
+  background: none;
+  border: none;
+  font-size: 24px;
+  cursor: pointer;
+  color: #666;
+  padding: 0 8px;
+}
+
+.close-btn:hover {
+  color: #333;
+}

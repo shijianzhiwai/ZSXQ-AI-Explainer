@@ -1,0 +1,30 @@
+{
+  "manifest_version": 3,
+  "name": "AI Content Explainer for 知识星球",
+  "version": "1.0",
+  "description": "在知识星球中右键解释内容",
+  "permissions": [
+    "contextMenus",
+    "activeTab",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://api.deepseek.com/*"
+  ],
+  "action": {
+    "default_popup": "popup/popup.html",
+    "default_icon": {
+    }
+  },
+  "background": {
+    "service_worker": "background.js"
+  },
+  "content_scripts": [
+    {
+      "matches": ["*://*.zsxq.com/*"],
+      "js": ["utils/api.js", "content.js"]
+    }
+  ],
+  "icons": {
+  }
+}
