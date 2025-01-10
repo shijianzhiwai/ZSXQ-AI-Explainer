@@ -5,21 +5,22 @@ console.log('ZSXQ Extension version:', chrome.runtime.getManifest().version);
 chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
   if (request.action === "getTextNearCursor") {
     const text = getContentDivText(request.x, request.y);
-    console.log('Text:', text);
     if (text) {
       try {
         // 创建弹窗但先不显示内容
         const popup = showResultPopup('正在加载...', false);
         const contentDiv = popup.querySelector('.popup-content');
         
+        // 用于累积完整的 Markdown 文本
+        let fullContent = '';
+        
         // 流式获取 AI 响应
         const streamResponse = await fetchAIExplanation(text);
-        let fullContent = '';
         
         for await (const chunk of streamResponse) {
           fullContent += chunk;
-          contentDiv.innerText = fullContent;
-          contentDiv.style.whiteSpace = 'pre-wrap';
+          // 每次更新时重新解析完整的 Markdown，并添加免责声明
+          contentDiv.innerHTML = marked.parse(fullContent + '\n\n---\n\n*内容由AI生成，可能存在错误，仅供参考*');
         }
       } catch (error) {
         console.error('Error:', error);
@@ -118,12 +119,15 @@ function showResultPopup(content, isError = false) {
   const popup = document.createElement('div');
   popup.className = 'ai-explanation-popup';
   
+  // 如果不是错误状态，使用 marked 解析 Markdown
+  const displayContent = isError ? content : marked.parse(content);
+  
   popup.innerHTML = `
     <div class="popup-header ${isError ? 'error' : ''}">
       <span>AI 解释</span>
       <button class="close-btn">×</button>
     </div>
-    <div class="popup-content ${isError ? 'error' : ''}">${content}</div>
+    <div class="popup-content ${isError ? 'error' : ''}">${displayContent}</div>
   `;
 
   // 更新弹窗样式，添加最大高度和滚动
@@ -131,7 +135,7 @@ function showResultPopup(content, isError = false) {
     position: fixed;
     top: 20px;
     right: 20px;
-    width: 300px;
+    width: 400px;
     max-height: 80vh; /* 限制最大高度为视口高度的80% */
     background: white;
     border-radius: 8px;
@@ -153,15 +157,63 @@ function showResultPopup(content, isError = false) {
     flex-shrink: 0;
   `;
 
-  // 更新content样式，添加滚动
   const contentDiv = popup.querySelector('.popup-content');
   contentDiv.style.cssText = `
     padding: 15px;
     overflow-y: auto;
-    white-space: pre-wrap;
     flex-grow: 1;
-    max-height: calc(80vh - 50px); /* 减去header高度 */
+    max-height: calc(80vh - 50px);
   `;
+
+  // 添加 Markdown 样式
+  if (!isError) {
+    contentDiv.style.cssText += `
+      line-height: 1.6;
+      color: #24292e;
+    `;
+    
+    // 为 Markdown 内容添加基础样式
+    const style = document.createElement('style');
+    style.textContent = `
+      .popup-content h1, .popup-content h2, .popup-content h3 {
+        margin-top: 24px;
+        margin-bottom: 16px;
+        font-weight: 600;
+        line-height: 1.25;
+      }
+      .popup-content h1 { font-size: 1.5em; }
+      .popup-content h2 { font-size: 1.3em; }
+      .popup-content h3 { font-size: 1.1em; }
+      .popup-content p { margin: 0 0 16px; }
+      .popup-content code {
+        padding: 0.2em 0.4em;
+        background-color: rgba(27,31,35,0.05);
+        border-radius: 3px;
+        font-family: monospace;
+      }
+      .popup-content pre {
+        padding: 16px;
+        overflow: auto;
+        background-color: #f6f8fa;
+        border-radius: 3px;
+      }
+      .popup-content pre code {
+        padding: 0;
+        background-color: transparent;
+      }
+      .popup-content ul, .popup-content ol {
+        padding-left: 2em;
+        margin-bottom: 16px;
+      }
+      .popup-content blockquote {
+        padding: 0 1em;
+        color: #6a737d;
+        border-left: 0.25em solid #dfe2e5;
+        margin: 0 0 16px;
+      }
+    `;
+    popup.appendChild(style);
+  }
 
   // 更新关闭按钮样式
   const closeBtn = popup.querySelector('.close-btn');
@@ -174,13 +226,11 @@ function showResultPopup(content, isError = false) {
     color: #999;
   `;
 
-  // 为 popup-content 添加样式
-  popup.querySelector('.popup-content').style.whiteSpace = 'pre-wrap';
-
   // 添加错误状态的样式
   if (isError) {
     popup.querySelector('.popup-header').style.backgroundColor = '#fff2f0';
     popup.querySelector('.popup-content').style.color = '#ff4d4f';
+    popup.querySelector('.popup-content').style.whiteSpace = 'pre-wrap';
   }
 
   document.body.appendChild(popup);

@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "AI Content Explainer for 知识星球",
-  "version": "1.0",
-  "description": "在知识星球中右键解释内容",
+  "version": "0.1.0",
+  "description": "【南半球聊财经】在知识星球中右键解释内容",
   "permissions": [
     "contextMenus",
     "activeTab",
@@ -22,7 +22,11 @@
   "content_scripts": [
     {
       "matches": ["*://*.zsxq.com/*"],
-      "js": ["utils/api.js", "content.js"]
+      "js": [
+        "lib/marked.min.js",
+        "utils/api.js",
+        "content.js"
+      ]
     }
   ],
   "icons": {
