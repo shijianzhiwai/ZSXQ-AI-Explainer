@@ -254,6 +254,10 @@ function showResultPopup(content, isError = false) {
 
 // 添加右键点击事件监听
 document.addEventListener('contextmenu', function(e) {
+  // 检查当前URL是否匹配知识星球指定链接
+  if (!window.location.href.includes('zsxq.com/group/28518511148841')) {
+    return;
+  }
   console.log('Right click event:', {
     clientX: e.clientX,
     clientY: e.clientY,
