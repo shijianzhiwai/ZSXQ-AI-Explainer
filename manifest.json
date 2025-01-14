@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
-  "name": "AI Content Explainer for 知识星球",
-  "version": "0.1.0",
+  "name": "ZSXQ AI Explainer",
+  "version": "0.2.0",
   "description": "【南半球聊财经】在知识星球中右键解释内容",
   "permissions": [
     "contextMenus",
@@ -24,6 +24,7 @@
       "matches": ["*://*.zsxq.com/*"],
       "js": [
         "lib/marked.min.js",
+        "utils/constants.js",
         "utils/api.js",
         "content.js"
       ]

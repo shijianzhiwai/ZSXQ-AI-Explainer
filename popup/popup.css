@@ -56,3 +56,22 @@
 .close-btn:hover {
   color: #333;
 }
+
+.config-form textarea {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 8px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  resize: vertical;
+  font-family: inherit;
+}
+
+.config-form button#resetPrompt {
+  background: #52c41a;
+  margin-left: 8px;
+}
+
+.config-form button#resetPrompt:hover {
+  background: #73d13d;
+}

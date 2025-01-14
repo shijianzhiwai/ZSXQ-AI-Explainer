@@ -7,16 +7,23 @@
 <body>
   <div class="popup-container">
     <div class="header">
-      <h2>AI Content Explainer</h2>
+      <h2>ZSXQ AI Explainer</h2>
       <button class="close-btn">&times;</button>
     </div>
     <div class="config-form">
       <label for="apiKey">DeepSeek API Key:</label>
       <input id="apiKey" placeholder="输入您的 API Key">
+      
+      <label for="systemPrompt">提示词（Prompt）:</label>
+      <textarea id="systemPrompt" rows="12" placeholder="输入自定义提示词"></textarea>
+      
       <button id="saveConfig">保存</button>
+      <button id="resetPrompt">重置默认提示词</button>
     </div>
-    <p class="hint">文本并右键点击"解释内容"来使用。</p>
+    <p class="hint">内容区域右键点击"解释内容"来使用。</p>
   </div>
+  <script src="../utils/constants.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>
+
