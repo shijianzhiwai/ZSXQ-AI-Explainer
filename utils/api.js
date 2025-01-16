@@ -14,8 +14,11 @@ async function fetchAIExplanation(text) {
     'selectedModel'
   ]);
 
-  // 确定使用哪个 API
-  const isOpenAI = selectedModel?.includes('gpt');
+  if (!selectedModel) {
+    throw new Error('请先选择模型');
+  }
+
+  const isOpenAI = selectedModel.provider === 'openai';
   
   if (isOpenAI && !openaiKey) {
     throw new Error('使用 OpenAI 模型需要配置 OpenAI API Key');
@@ -32,6 +35,9 @@ async function fetchAIExplanation(text) {
   const finalPrompt = systemPrompt || DEFAULT_SYSTEM_PROMPT;
 
   try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 秒超时
+
     const response = await fetch(API_ENDPOINT, {
       method: 'POST',
       headers: {
@@ -39,7 +45,7 @@ async function fetchAIExplanation(text) {
         'Authorization': `Bearer ${isOpenAI ? openaiKey : apiKey}`
       },
       body: JSON.stringify({
-        model: selectedModel || (isOpenAI ? 'gpt-3.5-turbo' : 'deepseek-chat'),
+        model: selectedModel.id || (isOpenAI ? 'gpt-3.5-turbo' : 'deepseek-chat'),
         messages: [
           {
             role: 'system',
@@ -51,11 +57,14 @@ async function fetchAIExplanation(text) {
           }
         ],
         stream: true
-      })
+      }),
+      signal: controller.signal // 添加 AbortSignal
     });
 
+    clearTimeout(timeoutId); // 请求成功后清除超时计时器
+
     if (!response.ok) {
-      throw new Error('API request failed');
+      throw new Error('API request failed: ' + response.status);
     }
 
     const reader = response.body.getReader();
@@ -63,6 +72,7 @@ async function fetchAIExplanation(text) {
     let content = '';
 
     return {
+      model: selectedModel.id,
       async *[Symbol.asyncIterator]() {
         while (true) {
           const { done, value } = await reader.read();
@@ -84,7 +94,8 @@ async function fetchAIExplanation(text) {
                   yield text;
                 }
               } catch (e) {
-                console.error('Error parsing chunk:', e);
+                console.error('Error parsing chunk: ' + e.message);
+                throw new Error('Error parsing chunk: ' + e.message);
               }
             }
           }
@@ -92,6 +103,9 @@ async function fetchAIExplanation(text) {
       }
     };
   } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('请求超时，请稍后重试');
+    }
     throw error;
   }
 }

@@ -125,3 +125,23 @@ input, textarea {
   border-radius: 4px;
   cursor: pointer;
 }
+
+.model-selector {
+  width: 100%;
+  padding: 8px;
+  margin-top: 4px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background-color: white;
+  cursor: pointer;
+}
+
+.model-selector:hover {
+  border-color: #40a9ff;
+}
+
+.model-selector:focus {
+  outline: none;
+  border-color: #1890ff;
+  box-shadow: 0 0 0 2px rgba(24,144,255,0.2);
+}

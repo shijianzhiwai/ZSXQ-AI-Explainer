@@ -6,25 +6,34 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
   if (request.action === "getTextNearCursor") {
     const text = getContentDivText(request.x, request.y);
     if (text) {
+
+      // 创建弹窗但先不显示内容
+      const popup = await showResultPopup('正在加载...', false);
+      const contentDiv = popup.querySelector('.popup-content');
+
+      // 用于累积完整的 Markdown 文本
+      let fullContent = '';
+
+      function updateContent(chunk) {
+        fullContent += chunk;
+        contentDiv.innerHTML = marked.parse(fullContent + '\n\n---\n\n*内容由AI生成，可能存在错误，仅供参考*');
+      }
+
       try {
-        // 创建弹窗但先不显示内容
-        const popup = await showResultPopup('正在加载...', false);
-        const contentDiv = popup.querySelector('.popup-content');
-        
-        // 用于累积完整的 Markdown 文本
-        let fullContent = '';
-        
         // 流式获取 AI 响应
         const streamResponse = await fetchAIExplanation(text);
         
         for await (const chunk of streamResponse) {
-          fullContent += chunk;
-          // 每次更新时重新解析完整的 Markdown，并添加免责声明
-          contentDiv.innerHTML = marked.parse(fullContent + '\n\n---\n\n*内容由AI生成，可能存在错误，仅供参考*');
+          updateContent(chunk);
         }
       } catch (error) {
         console.error('Error:', error);
-        await showResultPopup('获取内容失败，请重试', true);
+        
+        if (fullContent) {
+          updateContent(error.message);
+        } else {
+          await showResultPopup('获取内容失败，请重试: ' + error.message, true);
+        }
       }
     } else {
       await showResultPopup('未找到有效内容，请在内容区域右键', true);
@@ -119,18 +128,14 @@ async function showResultPopup(content, isError = false) {
   const popup = document.createElement('div');
   popup.className = 'ai-explanation-popup';
   
-  // 添加模型选择器
-  const modelSelectorHtml = await getModelSelectorHtml();
-  
+  const { selectedModel } = await chrome.storage.sync.get('selectedModel');
+  const modelName = selectedModel?.name || '默认模型';
+
   popup.innerHTML = `
     <div class="popup-header ${isError ? 'error' : ''}">
       <div class="header-left">
         <span>AI 解释</span>
-        ${!isError ? `
-          <select id="modelSelector" class="model-selector">
-            ${modelSelectorHtml}
-          </select>
-        ` : ''}
+        <span class="model-name">(${modelName})</span>
       </div>
       <button class="close-btn">×</button>
     </div>
@@ -172,24 +177,10 @@ async function showResultPopup(content, isError = false) {
       align-items: center;
       gap: 10px;
     }
-    
-    .model-selector {
-      padding: 4px 8px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
+    .model-name {
       font-size: 12px;
-      background: white;
-      cursor: pointer;
-    }
-    
-    .model-selector:hover {
-      border-color: #40a9ff;
-    }
-    
-    .model-selector:focus {
-      outline: none;
-      border-color: #1890ff;
-      box-shadow: 0 0 0 2px rgba(24,144,255,0.2);
+      color: #666;
+      margin-left: 8px;
     }
   `;
   popup.appendChild(style);
@@ -272,17 +263,6 @@ async function showResultPopup(content, isError = false) {
 
   document.body.appendChild(popup);
 
-  // 添加模型选择事件监听
-  if (!isError) {
-    const modelSelector = popup.querySelector('#modelSelector');
-    modelSelector.addEventListener('change', async (e) => {
-      const selectedModel = e.target.value;
-      // 保存选择的模型到存储
-      await chrome.storage.sync.set({ selectedModel });
-      // 可以在这里添加重新获取内容的逻辑
-    });
-  }
-
   // 添加关闭事件监听
   popup.querySelector('.close-btn').addEventListener('click', () => {
     popup.remove();
@@ -298,44 +278,6 @@ async function showResultPopup(content, isError = false) {
   }
 
   return popup;
-}
-
-// 获取模型选择器的 HTML
-async function getModelSelectorHtml() {
-  try {
-    const { availableModels, selectedModel } = await chrome.storage.sync.get(['availableModels', 'selectedModel']);
-    
-    if (!availableModels) {
-      return '<option value="">请先同步模型</option>';
-    }
-
-    const options = [];
-    
-    // 添加 DeepSeek 模型
-    if (availableModels.deepseek?.length) {
-      options.push('<optgroup label="DeepSeek">');
-      availableModels.deepseek.forEach(model => {
-        const selected = selectedModel === model.id ? 'selected' : '';
-        options.push(`<option value="${model.id}" ${selected}>${model.name}</option>`);
-      });
-      options.push('</optgroup>');
-    }
-
-    // 添加 OpenAI 模型
-    if (availableModels.openai?.length) {
-      options.push('<optgroup label="OpenAI">');
-      availableModels.openai.forEach(model => {
-        const selected = selectedModel === model.id ? 'selected' : '';
-        options.push(`<option value="${model.id}" ${selected}>${model.name}</option>`);
-      });
-      options.push('</optgroup>');
-    }
-
-    return options.length ? options.join('') : '<option value="">未找到可用模型</option>';
-  } catch (error) {
-    console.error('Error getting model selector HTML:', error);
-    return '<option value="">加载模型失败</option>';
-  }
 }
 
 // 添加右键点击事件监听

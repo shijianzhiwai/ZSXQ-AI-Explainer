@@ -1,7 +1,33 @@
 document.addEventListener('DOMContentLoaded', async () => {
-  // 加载已保存的配置
-  const { apiKey, openaiKey, openaiBaseUrl, systemPrompt } = await chrome.storage.sync.get(['apiKey', 'openaiKey', 'openaiBaseUrl', 'systemPrompt']);
-  
+  // 获取已保存的配置和模型信息
+  const { 
+    apiKey, 
+    openaiKey, 
+    openaiBaseUrl, 
+    systemPrompt,
+    availableModels,
+    selectedModel 
+  } = await chrome.storage.sync.get([
+    'apiKey', 
+    'openaiKey', 
+    'openaiBaseUrl', 
+    'systemPrompt',
+    'availableModels',
+    'selectedModel'
+  ]);
+
+  // 初始化模型选择器
+  const modelSelector = document.getElementById('modelSelector');
+  if (availableModels) {
+    updateModelSelector(modelSelector, availableModels, selectedModel);
+  }
+
+  // 添加模型选择事件监听
+  modelSelector.addEventListener('change', async (e) => {
+    const selectedModelId = e.target.value;
+    await updateSelectedModel(selectedModelId, availableModels);
+  });
+
   if (apiKey) {
     document.getElementById('apiKey').value = apiKey;
   }
@@ -20,8 +46,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('systemPrompt').value = DEFAULT_SYSTEM_PROMPT;
   }
 
-  // 保存配置
-  document.getElementById('saveConfig').addEventListener('click', async () => {
+  async function saveConfig() {
     const apiKey = document.getElementById('apiKey').value.trim();
     const openaiKey = document.getElementById('openaiKey').value.trim();
     let openaiBaseUrl = document.getElementById('openaiBaseUrl').value.trim();
@@ -45,6 +70,11 @@ document.addEventListener('DOMContentLoaded', async () => {
       openaiBaseUrl,
       systemPrompt 
     });
+  }
+
+  // 保存配置
+  document.getElementById('saveConfig').addEventListener('click', async () => {
+    await saveConfig();
     alert('配置已保存');
   });
 
@@ -80,14 +110,11 @@ document.addEventListener('DOMContentLoaded', async () => {
   });
 
   document.getElementById('syncModels').addEventListener('click', async () => {
+    await saveConfig();
+
     const apiKey = document.getElementById('apiKey').value.trim();
     const openaiKey = document.getElementById('openaiKey').value.trim();
     const openaiBaseUrl = document.getElementById('openaiBaseUrl').value.trim();
-
-    if (!apiKey && !openaiKey) {
-      alert('请至少输入一个 API Key');
-      return;
-    }
 
     const syncBtn = document.getElementById('syncModels');
     syncBtn.disabled = true;
@@ -101,8 +128,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
           const deepseekResult = await syncDeepseekModels(apiKey);
           models.deepseek = deepseekResult.models;
+          models.deepseek = models.deepseek.map(model => ({ ...model, provider: 'deepseek' }));
         } catch (error) {
           console.error('DeepSeek sync failed:', error);
+          alert('DeepSeek 模型同步失败: ' + error.message);
         }
       }
 
@@ -111,13 +140,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         try {
           const openaiResult = await syncOpenAIModels(openaiKey, openaiBaseUrl);
           models.openai = openaiResult.models;
+          models.openai = models.openai.map(model => ({ ...model, provider: 'openai' }));
         } catch (error) {
           console.error('OpenAI sync failed:', error);
+          alert('OpenAI 模型同步失败: ' + error.message);
         }
       }
 
-      // 保存所有模型
+      // 保存所有模型后更新选择器
       await chrome.storage.sync.set({ availableModels: models });
+      updateModelSelector(document.getElementById('modelSelector'), models, selectedModel);
 
       if (models.deepseek.length || models.openai.length) {
         alert('模型同步成功');
@@ -131,4 +163,44 @@ document.addEventListener('DOMContentLoaded', async () => {
       syncBtn.textContent = '同步可用模型';
     }
   });
-}); 
+});
+
+// 添加更新模型选择器的函数
+function updateModelSelector(selector, availableModels, selectedModel) {
+  const options = [];
+  
+  if (availableModels.deepseek?.length) {
+    options.push('<optgroup label="DeepSeek">');
+    availableModels.deepseek.forEach(model => {
+      const selected = selectedModel?.id === model.id ? 'selected' : '';
+      options.push(`<option value="${model.id}" ${selected}>${model.name}</option>`);
+    });
+    options.push('</optgroup>');
+  }
+
+  if (availableModels.openai?.length) {
+    options.push('<optgroup label="OpenAI">');
+    availableModels.openai.forEach(model => {
+      const selected = selectedModel?.id === model.id ? 'selected' : '';
+      options.push(`<option value="${model.id}" ${selected}>${model.name}</option>`);
+    });
+    options.push('</optgroup>');
+  }
+
+  selector.innerHTML = options.length ? options.join('') : '<option value="">请先同步模型</option>';
+  
+  // 如果有可用模型但没有选中的模型，自动选择第一个模型
+  if (options.length && !selectedModel) {
+    const firstModelId = selector.querySelector('option[value]').value;
+    updateSelectedModel(firstModelId, availableModels);
+  }
+}
+
+async function updateSelectedModel(selectedModelId, availableModels) {
+  const selectedModel = [
+    ...(availableModels?.deepseek || []),
+    ...(availableModels?.openai || [])
+  ].find(model => model.id === selectedModelId);
+  
+  await chrome.storage.sync.set({ selectedModel });
+}
