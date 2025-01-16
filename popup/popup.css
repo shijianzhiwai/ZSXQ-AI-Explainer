@@ -1,47 +1,79 @@
 .popup-container {
-  padding: 16px;
-  width: 300px;
+  position: relative;
+  width: 320px;
+  min-height: 400px;
+  display: flex;
+  flex-direction: column;
 }
 
-.config-form {
-  margin: 16px 0;
+/* Tab 相关样式 */
+.tab-container {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
 }
 
-.config-form label {
-  display: block;
-  margin-bottom: 8px;
-}
-
-.config-form input {
+.sync-btn {
   width: 100%;
+  margin-top: 8px;
   padding: 8px;
-  margin-bottom: 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-}
-
-.config-form button {
-  background: #1890ff;
+  background: #722ed1;
   color: white;
   border: none;
-  padding: 8px 16px;
   border-radius: 4px;
   cursor: pointer;
 }
 
-.config-form button:hover {
-  background: #40a9ff;
+.sync-btn:disabled {
+  background: #d9d9d9;
+  cursor: not-allowed;
 }
 
-.hint {
-  color: #666;
+.tab-buttons {
+  display: flex;
+  border-bottom: 1px solid #ddd;
+  margin-bottom: 16px;
+}
+
+.tab-btn {
+  padding: 8px 16px;
+  border: none;
+  background: none;
+  cursor: pointer;
   font-size: 14px;
+  color: #666;
+}
+
+.tab-btn.active {
+  color: #1890ff;
+  border-bottom: 2px solid #1890ff;
+}
+
+.tab-content {
+  flex: 1;
+}
+
+.tab-pane {
+  display: none;
+  padding: 0 16px 10px;
+}
+
+.tab-pane.active {
+  display: block;
 }
 
 .header {
   display: flex;
   justify-content: space-between;
   align-items: center;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1;
 }
 
 .close-btn {
@@ -50,28 +82,46 @@
   font-size: 24px;
   cursor: pointer;
   color: #666;
-  padding: 0 8px;
+  padding: 0;
+  line-height: 1;
 }
 
 .close-btn:hover {
   color: #333;
 }
 
-.config-form textarea {
+.footer {
+  padding: 16px;
+  border-top: 1px solid #ddd;
+}
+
+/* 调整输入框和按钮样式 */
+input, textarea {
   width: 100%;
   padding: 8px;
-  margin-bottom: 8px;
+  margin-bottom: 16px;
   border: 1px solid #ddd;
   border-radius: 4px;
-  resize: vertical;
-  font-family: inherit;
+  box-sizing: border-box;
 }
 
-.config-form button#resetPrompt {
+#saveConfig {
+  width: 100%;
+  padding: 8px;
+  background: #1890ff;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+#resetPrompt {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px;
   background: #52c41a;
-  margin-left: 8px;
-}
-
-.config-form button#resetPrompt:hover {
-  background: #73d13d;
+  color: white;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
 }

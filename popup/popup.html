@@ -10,19 +10,47 @@
       <h2>ZSXQ AI Explainer</h2>
       <button class="close-btn">&times;</button>
     </div>
-    <div class="config-form">
-      <label for="apiKey">DeepSeek API Key:</label>
-      <input id="apiKey" placeholder="输入您的 API Key">
-      
-      <label for="systemPrompt">提示词（Prompt）:</label>
-      <textarea id="systemPrompt" rows="12" placeholder="输入自定义提示词"></textarea>
-      
-      <button id="saveConfig">保存</button>
-      <button id="resetPrompt">重置默认提示词</button>
+    
+    <div class="tab-container">
+      <div class="tab-buttons">
+        <button class="tab-btn active" data-tab="model">模型配置</button>
+        <button class="tab-btn" data-tab="prompt">提示词设置</button>
+      </div>
+
+      <div class="tab-content">
+        <!-- 模型配置 Tab -->
+        <div class="tab-pane active" id="model">
+          <div id="deepseekConfig">
+            <label for="apiKey">DeepSeek API Key:</label>
+            <input id="apiKey" placeholder="输入 DeepSeek API Key">
+          </div>
+          
+          <div id="openaiConfig">
+            <label for="openaiKey">OpenAI API Key:</label>
+            <input id="openaiKey" placeholder="输入 OpenAI API Key">
+            <label for="openaiBaseUrl">OpenAI Base URL (可选):</label>
+            <input id="openaiBaseUrl" placeholder="自定义 OpenAI API 地址">
+          </div>
+
+          <button id="syncModels" class="sync-btn">同步可用模型</button>
+        </div>
+
+        <!-- 提示词设置 Tab -->
+        <div class="tab-pane" id="prompt">
+          <label for="systemPrompt">提示词 (Prompt):</label>
+          <textarea id="systemPrompt" rows="12" placeholder="输入自定义提示词"></textarea>
+          <button id="resetPrompt">重置默认提示词</button>
+        </div>
+      </div>
     </div>
-    <p class="hint">内容区域右键点击"解释内容"来使用。</p>
+
+    <div class="footer">
+      <button id="saveConfig">保存配置</button>
+      <p class="hint">内容区域右键点击"解释内容"来使用。</p>
+    </div>
   </div>
   <script src="../utils/constants.js"></script>
+  <script src="../utils/api.js"></script>
   <script src="popup.js"></script>
 </body>
 </html>

@@ -8,7 +8,7 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
     if (text) {
       try {
         // 创建弹窗但先不显示内容
-        const popup = showResultPopup('正在加载...', false);
+        const popup = await showResultPopup('正在加载...', false);
         const contentDiv = popup.querySelector('.popup-content');
         
         // 用于累积完整的 Markdown 文本
@@ -24,10 +24,10 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
         }
       } catch (error) {
         console.error('Error:', error);
-        showResultPopup('获取内容失败，请重试', true);
+        await showResultPopup('获取内容失败，请重试', true);
       }
     } else {
-      showResultPopup('未找到有效内容，请在内容区域右键', true);
+      await showResultPopup('未找到有效内容，请在内容区域右键', true);
     }
   }
 });
@@ -109,7 +109,7 @@ function findClosestContentDiv(element) {
 }
 
 // 优化弹窗显示函数，添加不同状态的样式
-function showResultPopup(content, isError = false) {
+async function showResultPopup(content, isError = false) {
   // 移除已存在的弹窗
   const existingPopup = document.querySelector('.ai-explanation-popup');
   if (existingPopup) {
@@ -119,24 +119,31 @@ function showResultPopup(content, isError = false) {
   const popup = document.createElement('div');
   popup.className = 'ai-explanation-popup';
   
-  // 如果不是错误状态，使用 marked 解析 Markdown
-  const displayContent = isError ? content : marked.parse(content);
+  // 添加模型选择器
+  const modelSelectorHtml = await getModelSelectorHtml();
   
   popup.innerHTML = `
     <div class="popup-header ${isError ? 'error' : ''}">
-      <span>AI 解释</span>
+      <div class="header-left">
+        <span>AI 解释</span>
+        ${!isError ? `
+          <select id="modelSelector" class="model-selector">
+            ${modelSelectorHtml}
+          </select>
+        ` : ''}
+      </div>
       <button class="close-btn">×</button>
     </div>
-    <div class="popup-content ${isError ? 'error' : ''}">${displayContent}</div>
+    <div class="popup-content ${isError ? 'error' : ''}">${isError ? content : marked.parse(content)}</div>
   `;
 
-  // 更新弹窗样式，添加最大高度和滚动
+  // 更新弹窗样式
   popup.style.cssText = `
     position: fixed;
     top: 20px;
     right: 20px;
     width: 400px;
-    max-height: 80vh; /* 限制最大高度为视口高度的80% */
+    max-height: 80vh;
     background: white;
     border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.2);
@@ -146,7 +153,7 @@ function showResultPopup(content, isError = false) {
     flex-direction: column;
   `;
 
-  // 更新header样式
+  // 更新 header 样式
   const header = popup.querySelector('.popup-header');
   header.style.cssText = `
     padding: 12px 15px;
@@ -156,6 +163,36 @@ function showResultPopup(content, isError = false) {
     align-items: center;
     flex-shrink: 0;
   `;
+
+  // 添加模型选择器样式
+  const style = document.createElement('style');
+  style.textContent = `
+    .header-left {
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+    
+    .model-selector {
+      padding: 4px 8px;
+      border: 1px solid #ddd;
+      border-radius: 4px;
+      font-size: 12px;
+      background: white;
+      cursor: pointer;
+    }
+    
+    .model-selector:hover {
+      border-color: #40a9ff;
+    }
+    
+    .model-selector:focus {
+      outline: none;
+      border-color: #1890ff;
+      box-shadow: 0 0 0 2px rgba(24,144,255,0.2);
+    }
+  `;
+  popup.appendChild(style);
 
   const contentDiv = popup.querySelector('.popup-content');
   contentDiv.style.cssText = `
@@ -235,6 +272,17 @@ function showResultPopup(content, isError = false) {
 
   document.body.appendChild(popup);
 
+  // 添加模型选择事件监听
+  if (!isError) {
+    const modelSelector = popup.querySelector('#modelSelector');
+    modelSelector.addEventListener('change', async (e) => {
+      const selectedModel = e.target.value;
+      // 保存选择的模型到存储
+      await chrome.storage.sync.set({ selectedModel });
+      // 可以在这里添加重新获取内容的逻辑
+    });
+  }
+
   // 添加关闭事件监听
   popup.querySelector('.close-btn').addEventListener('click', () => {
     popup.remove();
@@ -250,6 +298,44 @@ function showResultPopup(content, isError = false) {
   }
 
   return popup;
+}
+
+// 获取模型选择器的 HTML
+async function getModelSelectorHtml() {
+  try {
+    const { availableModels, selectedModel } = await chrome.storage.sync.get(['availableModels', 'selectedModel']);
+    
+    if (!availableModels) {
+      return '<option value="">请先同步模型</option>';
+    }
+
+    const options = [];
+    
+    // 添加 DeepSeek 模型
+    if (availableModels.deepseek?.length) {
+      options.push('<optgroup label="DeepSeek">');
+      availableModels.deepseek.forEach(model => {
+        const selected = selectedModel === model.id ? 'selected' : '';
+        options.push(`<option value="${model.id}" ${selected}>${model.name}</option>`);
+      });
+      options.push('</optgroup>');
+    }
+
+    // 添加 OpenAI 模型
+    if (availableModels.openai?.length) {
+      options.push('<optgroup label="OpenAI">');
+      availableModels.openai.forEach(model => {
+        const selected = selectedModel === model.id ? 'selected' : '';
+        options.push(`<option value="${model.id}" ${selected}>${model.name}</option>`);
+      });
+      options.push('</optgroup>');
+    }
+
+    return options.length ? options.join('') : '<option value="">未找到可用模型</option>';
+  } catch (error) {
+    console.error('Error getting model selector HTML:', error);
+    return '<option value="">加载模型失败</option>';
+  }
 }
 
 // 添加右键点击事件监听
