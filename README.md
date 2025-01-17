@@ -13,7 +13,7 @@
 ## 使用方法
 
 1. 安装扩展后，点击扩展图标配置 DeepSeek API Key：
-   1. 如何获取 API Key？进入 [DeepSeek AI](https://www.deepseek.com/) 官网，点击"接入 API"
+   1. 如何获取 API Key？进入 [DeepSeek AI](https://www.deepseek.com/) 官网，点击右上角"开放平台"
    2. 在 API Keys 页面创建新的 API Key
    3. 注：充值 10 元即可使用较长时间，无任何广告成分，放心食用
 2. 在知识星球页面内容区域右键唤起菜单（部分浏览器如 Chrome 需要"双击右键"）
@@ -33,7 +33,9 @@
 
 1. 点击扩展图标打开配置面板
 2. 输入您的 DeepSeek API Key
-3. 点击保存即可使用
+3. 点击同步可用模型
+4. 选择模型
+5. 点击保存即可使用
 
 ## 规划
 
