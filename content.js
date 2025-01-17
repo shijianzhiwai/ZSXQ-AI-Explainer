@@ -128,7 +128,7 @@ async function showResultPopup(content, isError = false) {
   const popup = document.createElement('div');
   popup.className = 'ai-explanation-popup';
   
-  const { selectedModel } = await chrome.storage.sync.get('selectedModel');
+  const { selectedModel } = await chrome.storage.local.get('selectedModel');
   const modelName = selectedModel?.name || '默认模型';
 
   popup.innerHTML = `

@@ -3,14 +3,18 @@ document.addEventListener('DOMContentLoaded', async () => {
   const { 
     apiKey, 
     openaiKey, 
-    openaiBaseUrl, 
-    systemPrompt,
-    availableModels,
-    selectedModel 
+    openaiBaseUrl
   } = await chrome.storage.sync.get([
     'apiKey', 
     'openaiKey', 
-    'openaiBaseUrl', 
+    'openaiBaseUrl'
+  ]);
+
+  let {
+    systemPrompt,
+    availableModels,
+    selectedModel
+  } = await chrome.storage.local.get([
     'systemPrompt',
     'availableModels',
     'selectedModel'
@@ -25,7 +29,7 @@ document.addEventListener('DOMContentLoaded', async () => {
   // 添加模型选择事件监听
   modelSelector.addEventListener('change', async (e) => {
     const selectedModelId = e.target.value;
-    await updateSelectedModel(selectedModelId, availableModels);
+    selectedModel = await updateSelectedModel(selectedModelId, availableModels);
   });
 
   if (apiKey) {
@@ -64,12 +68,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     openaiBaseUrl = openaiBaseUrl.replace(/\/v1$/, '').replace(/\/$/, '');
 
-    await chrome.storage.sync.set({ 
-      apiKey,
-      openaiKey,
-      openaiBaseUrl,
-      systemPrompt 
-    });
+    // 分别存储到 sync 和 local
+    await Promise.all([
+      chrome.storage.sync.set({ 
+        apiKey,
+        openaiKey,
+        openaiBaseUrl
+      }),
+      chrome.storage.local.set({
+        systemPrompt
+      })
+    ]);
   }
 
   // 保存配置
@@ -85,7 +94,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     if (confirmed) {
       const textarea = document.getElementById('systemPrompt');
       textarea.value = DEFAULT_SYSTEM_PROMPT;
-      await chrome.storage.sync.remove('systemPrompt');
+      await chrome.storage.local.remove('systemPrompt');
       alert('提示词已重置为默认值');
     }
   });
@@ -148,8 +157,9 @@ document.addEventListener('DOMContentLoaded', async () => {
       }
 
       // 保存所有模型后更新选择器
-      await chrome.storage.sync.set({ availableModels: models });
-      updateModelSelector(document.getElementById('modelSelector'), models, selectedModel);
+      await chrome.storage.local.set({ availableModels: models });
+      availableModels = models;
+      updateModelSelector(document.getElementById('modelSelector'), availableModels, selectedModel);
 
       if (models.deepseek.length || models.openai.length) {
         alert('模型同步成功');
@@ -157,6 +167,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         alert('没有同步到任何可用模型，请检查 API Key 是否正确');
       }
     } catch (error) {
+      console.error('同步失败:', error);
       alert(`同步失败: ${error.message}`);
     } finally {
       syncBtn.disabled = false;
@@ -172,7 +183,7 @@ function updateModelSelector(selector, availableModels, selectedModel) {
   if (availableModels.deepseek?.length) {
     options.push('<optgroup label="DeepSeek">');
     availableModels.deepseek.forEach(model => {
-      const selected = selectedModel?.id === model.id ? 'selected' : '';
+      const selected = selectedModel?.id === model.id && selectedModel?.provider === 'deepseek' ? 'selected' : '';
       options.push(`<option value="${model.id}" ${selected}>${model.name}</option>`);
     });
     options.push('</optgroup>');
@@ -181,7 +192,7 @@ function updateModelSelector(selector, availableModels, selectedModel) {
   if (availableModels.openai?.length) {
     options.push('<optgroup label="OpenAI">');
     availableModels.openai.forEach(model => {
-      const selected = selectedModel?.id === model.id ? 'selected' : '';
+      const selected = selectedModel?.id === model.id && selectedModel?.provider === 'openai' ? 'selected' : '';
       options.push(`<option value="${model.id}" ${selected}>${model.name}</option>`);
     });
     options.push('</optgroup>');
@@ -202,5 +213,7 @@ async function updateSelectedModel(selectedModelId, availableModels) {
     ...(availableModels?.openai || [])
   ].find(model => model.id === selectedModelId);
   
-  await chrome.storage.sync.set({ selectedModel });
+  await chrome.storage.local.set({ selectedModel });
+
+  return selectedModel;
 }

@@ -3,13 +3,17 @@ async function fetchAIExplanation(text) {
   const { 
     apiKey, 
     openaiKey, 
-    openaiBaseUrl, 
-    systemPrompt,
-    selectedModel 
+    openaiBaseUrl
   } = await chrome.storage.sync.get([
     'apiKey', 
     'openaiKey', 
-    'openaiBaseUrl', 
+    'openaiBaseUrl'
+  ]);
+
+  const {
+    systemPrompt,
+    selectedModel
+  } = await chrome.storage.local.get([
     'systemPrompt',
     'selectedModel'
   ]);
@@ -45,7 +49,7 @@ async function fetchAIExplanation(text) {
         'Authorization': `Bearer ${isOpenAI ? openaiKey : apiKey}`
       },
       body: JSON.stringify({
-        model: selectedModel.id || (isOpenAI ? 'gpt-3.5-turbo' : 'deepseek-chat'),
+        model: selectedModel.id,
         messages: [
           {
             role: 'system',
@@ -157,10 +161,12 @@ async function syncOpenAIModels(apiKey, baseUrl = 'https://api.openai.com') {
     }
 
     const data = await response.json();
-    console.log(data);
     return {
       models: data.data
-        .filter(model => model.id.includes('gpt') || model.id.includes('claude'))  // 只返回 GPT 或 Claude 相关模型
+        .filter(model => !model.id.includes('dall-e') &&  // 尝试过滤一些图像、嵌入模型
+                        !model.id.includes('image') && 
+                        !model.id.includes('vision') && 
+                        !model.id.includes('embedding'))
         .map(model => ({
           id: model.id,
           name: model.id,
