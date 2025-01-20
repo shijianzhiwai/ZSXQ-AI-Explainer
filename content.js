@@ -119,6 +119,17 @@ function findClosestContentDiv(element) {
 
 // 优化弹窗显示函数，添加不同状态的样式
 async function showResultPopup(content, isError = false) {
+  // 获取保存的位置和大小
+  const { popupSettings } = await chrome.storage.local.get('popupSettings');
+  const defaultSettings = {
+    left: (window.innerWidth - 400 - 50) + 'px',
+    top: '20px',
+    width: '400px',
+    height: '80vh'
+  };
+  console.log('popupSettings:', popupSettings);
+  const settings = popupSettings || defaultSettings;
+
   // 移除已存在的弹窗
   const existingPopup = document.querySelector('.ai-explanation-popup');
   if (existingPopup) {
@@ -140,15 +151,16 @@ async function showResultPopup(content, isError = false) {
       <button class="close-btn">×</button>
     </div>
     <div class="popup-content ${isError ? 'error' : ''}">${isError ? content : marked.parse(content)}</div>
+    <div class="resize-handle"></div>
   `;
 
   // 更新弹窗样式
   popup.style.cssText = `
     position: fixed;
-    top: 20px;
-    right: 20px;
-    width: 400px;
-    max-height: 80vh;
+    top: ${settings.top};
+    left: ${settings.left};
+    width: ${settings.width};
+    height: ${settings.height};
     background: white;
     border-radius: 8px;
     box-shadow: 0 2px 10px rgba(0,0,0,0.2);
@@ -156,6 +168,8 @@ async function showResultPopup(content, isError = false) {
     border: 2px solid #1890ff;
     display: flex;
     flex-direction: column;
+    resize: both;
+    overflow: hidden;
   `;
 
   // 更新 header 样式
@@ -181,6 +195,18 @@ async function showResultPopup(content, isError = false) {
       font-size: 12px;
       color: #666;
       margin-left: 8px;
+    }
+    .ai-explanation-popup .popup-header {
+      cursor: move;
+      user-select: none;
+    }
+    .ai-explanation-popup .resize-handle {
+      position: absolute;
+      right: 0;
+      bottom: 0;
+      width: 15px;
+      height: 15px;
+      cursor: se-resize;
     }
   `;
   popup.appendChild(style);
@@ -262,6 +288,66 @@ async function showResultPopup(content, isError = false) {
   }
 
   document.body.appendChild(popup);
+
+  // 实现拖动功能
+  let isDragging = false;
+  let currentX;
+  let currentY;
+  let initialX;
+  let initialY;
+
+  popup.querySelector('.popup-header').addEventListener('mousedown', initDrag);
+
+  function initDrag(e) {
+    isDragging = true;
+    initialX = e.clientX - popup.offsetLeft;
+    initialY = e.clientY - popup.offsetTop;
+
+    document.addEventListener('mousemove', drag);
+    document.addEventListener('mouseup', stopDrag);
+  }
+
+  function drag(e) {
+    if (isDragging) {
+      e.preventDefault();
+      currentX = e.clientX - initialX;
+      currentY = e.clientY - initialY;
+
+      // 确保弹窗不会被拖出视口
+      currentX = Math.max(0, Math.min(currentX, window.innerWidth - popup.offsetWidth));
+      currentY = Math.max(0, Math.min(currentY, window.innerHeight - popup.offsetHeight));
+
+      popup.style.left = currentX + 'px';
+      popup.style.top = currentY + 'px';
+      popup.style.right = 'auto';
+    }
+  }
+
+  function stopDrag() {
+    isDragging = false;
+    document.removeEventListener('mousemove', drag);
+    document.removeEventListener('mouseup', stopDrag);
+    
+    // 保存位置设置
+    savePopupSettings();
+  }
+
+  // 监听大小改变
+  const resizeObserver = new ResizeObserver(() => {
+    savePopupSettings();
+  });
+  resizeObserver.observe(popup);
+
+  // 保存弹窗设置
+  function savePopupSettings() {
+    const settings = {
+      top: popup.style.top,
+      left: popup.style.left,
+      width: popup.style.width,
+      height: popup.style.height
+    };
+    chrome.storage.local.set({ popupSettings: settings });
+  }
 
   // 添加关闭事件监听
   popup.querySelector('.close-btn').addEventListener('click', () => {
