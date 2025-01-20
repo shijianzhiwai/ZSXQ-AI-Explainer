@@ -1,3 +1,4 @@
+/* 基础布局 */
 .popup-container {
   position: relative;
   width: 320px;
@@ -6,27 +7,26 @@
   flex-direction: column;
 }
 
-/* Tab 相关样式 */
+/* 标题栏 */
+.header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 12px 16px;
+  margin-bottom: 10px;
+}
+
+.header h2 {
+  margin: 0;
+  font-size: 18px;
+  line-height: 1;
+}
+
+/* Tab 样式 */
 .tab-container {
   flex: 1;
   display: flex;
   flex-direction: column;
-}
-
-.sync-btn {
-  width: 100%;
-  margin-top: 8px;
-  padding: 8px;
-  background: #722ed1;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-
-.sync-btn:disabled {
-  background: #d9d9d9;
-  cursor: not-allowed;
 }
 
 .tab-buttons {
@@ -62,20 +62,27 @@
   display: block;
 }
 
-.header {
-  display: flex;
-  justify-content: space-between;
-  align-items: center;
-  padding: 12px 16px;
-  margin-bottom: 10px;
+/* 表单元素 */
+.tab-container label {
+  display: block;
+  font-size: 15px;
+  font-weight: 400;
+  margin-bottom: 3px;
 }
 
-.header h2 {
-  margin: 0;
-  font-size: 18px;
-  line-height: 1;
+.tab-container input,
+.tab-container textarea,
+.tab-container select {
+  width: 100%;
+  padding: 8px;
+  margin-bottom: 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-sizing: border-box;
+  font-size: 14px;
 }
 
+/* 按钮样式 */
 .close-btn {
   background: none;
   border: none;
@@ -90,40 +97,42 @@
   color: #333;
 }
 
-.footer {
-  padding: 16px;
-  border-top: 1px solid #ddd;
-}
-
-/* 调整输入框和按钮样式 */
-input, textarea {
+/* 功能按钮通用样式 */
+#saveConfig,
+#resetPrompt,
+.sync-btn {
   width: 100%;
   padding: 8px;
-  margin-bottom: 16px;
-  border: 1px solid #ddd;
+  border: none;
   border-radius: 4px;
-  box-sizing: border-box;
+  cursor: pointer;
+  color: white;
+  margin-top: 8px;
+  font-size: 15px;
 }
 
 #saveConfig {
-  width: 100%;
-  padding: 8px;
   background: #1890ff;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
+  margin-top: 0;  /* 第一个按钮不需要上边距 */
 }
 
 #resetPrompt {
-  width: 100%;
-  margin-top: 8px;
-  padding: 8px;
   background: #52c41a;
-  color: white;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
+}
+
+.sync-btn {
+  background: #722ed1;
+}
+
+.sync-btn:disabled {
+  background: #d9d9d9;
+  cursor: not-allowed;
+}
+
+/* 页脚 */
+.footer {
+  padding: 16px;
+  border-top: 1px solid #ddd;
 }
 
 .model-selector {
