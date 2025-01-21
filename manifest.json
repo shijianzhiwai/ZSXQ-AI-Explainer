@@ -27,6 +27,7 @@
         "lib/marked.min.js",
         "utils/constants.js",
         "utils/api.js",
+        "utils/popup.js",
         "content.js"
       ]
     }

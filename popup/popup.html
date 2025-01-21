@@ -53,10 +53,24 @@
         </div>
 
         <div class="tab-pane" id="logseqConfig">
+          <label for="logseqToken">Logseq Token:</label>
+          <input id="logseqToken" placeholder="输入 Logseq Token">
           <label for="logseqGraphPath">Logseq Graph:</label>
           <div class="folder-select">
-            <input id="logseqGraphPath" readonly disabled placeholder="请安装 Logseq 插件">
-            <button id="selectFolder" type="button" class="folder-btn">连接 Logseq</button>
+            <input id="logseqGraphPath" readonly disabled placeholder="请安装先设置 Logseq">
+            <button id="connectLogseq" type="button" class="folder-btn">连接 Logseq</button>
+          </div>
+          <div class="tips">
+            <p>📝 Logseq 同步设置说明：</p>
+            <ol>
+              <li>开启"开发者模式" 设置>高级设置>开发者模式</li>
+              <li>开启"HTTP APIs server" 更多功能>HTTP APIs server</li>
+              <li>重启 Logseq 以使设置生效</li>
+              <li>Logseq 右上角 API 功能设置 Token</li>
+              <li>Start server</li>
+              <li>本界面填入配置的 Token 点击"连接 Logseq"</li>
+            </ol>
+            <p class="tip-link">详细说明请参考：<a href="https://docs.logseq.com/#/page/local%20http%20server" target="_blank">Logseq HTTP Server 文档</a></p>
           </div>
         </div>
       </div>

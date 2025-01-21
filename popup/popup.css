@@ -65,9 +65,10 @@
 /* 表单元素 */
 .tab-container label {
   display: block;
-  font-size: 15px;
+  font-size: 14px;
   font-weight: 400;
   margin-bottom: 3px;
+  color: #1c1c1c;
 }
 
 .tab-container input,
@@ -172,4 +173,38 @@
   white-space: nowrap;
   height: 100%;
   align-self: center;
+}
+
+.tips {
+  padding: 5px;
+  background-color: #f8f9fa;
+  border-radius: 4px;
+  font-size: 0.9em;
+}
+
+.tips p {
+  margin: 5px 0;
+}
+
+.tips ol {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
+.tips li {
+  margin: 2px 0;
+}
+
+.tip-link {
+  font-size: 0.85em;
+  color: #666;
+}
+
+.tip-link a {
+  color: #0366d6;
+  text-decoration: none;
+}
+
+.tip-link a:hover {
+  text-decoration: underline;
 }

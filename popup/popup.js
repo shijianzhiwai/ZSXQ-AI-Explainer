@@ -13,11 +13,15 @@ document.addEventListener('DOMContentLoaded', async () => {
   let {
     systemPrompt,
     availableModels,
-    selectedModel
+    selectedModel,
+    logseqToken,
+    logseqGraphPath
   } = await chrome.storage.local.get([
     'systemPrompt',
     'availableModels',
-    'selectedModel'
+    'selectedModel',
+    'logseqToken',
+    'logseqGraphPath'
   ]);
 
   // 初始化模型选择器
@@ -50,11 +54,21 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('systemPrompt').value = DEFAULT_SYSTEM_PROMPT;
   }
 
+  if (logseqToken) {
+    document.getElementById('logseqToken').value = logseqToken;
+  }
+
+  if (logseqGraphPath) {
+    document.getElementById('logseqGraphPath').value = logseqGraphPath;
+  }
+
   async function saveConfig() {
     const apiKey = document.getElementById('apiKey').value.trim();
     const openaiKey = document.getElementById('openaiKey').value.trim();
     let openaiBaseUrl = document.getElementById('openaiBaseUrl').value.trim();
     const systemPrompt = document.getElementById('systemPrompt').value.trim();
+    const logseqToken = document.getElementById('logseqToken').value.trim();
+    const logseqGraphPath = document.getElementById('logseqGraphPath').value.trim();
     
     if (!apiKey && !openaiKey) {
       alert('请输入DeepSeek API Key或OpenAI API Key');
@@ -76,7 +90,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         openaiBaseUrl
       }),
       chrome.storage.local.set({
-        systemPrompt
+        systemPrompt,
+        logseqToken,
+        logseqGraphPath
       })
     ]);
   }
@@ -172,6 +188,48 @@ document.addEventListener('DOMContentLoaded', async () => {
     } finally {
       syncBtn.disabled = false;
       syncBtn.textContent = '同步可用模型';
+    }
+  });
+
+  document.getElementById('connectLogseq').addEventListener('click', async () => {
+    const logseqToken = document.getElementById('logseqToken').value.trim();
+    
+    try {
+      const response = await fetch('http://127.0.0.1:12315/api', {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${logseqToken}`,
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          method: 'logseq.App.getCurrentGraph',
+          args: []
+        })
+      });
+
+      if (!response.ok) {
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (error) {
+          console.error('Error parsing response:', error);
+          errorData = { message: 'Failed to connect to Logseq: ' + response.statusText };
+        }
+        throw new Error(errorData.message);
+      }
+
+      const data = await response.json();
+      if (data.name) {
+        document.getElementById('logseqGraphPath').value = data.name;
+        // 自动触发保存配置
+        saveConfig();
+        alert('连接 Logseq 成功');
+      } else {
+        throw new Error('Invalid response from Logseq');
+      }
+    } catch (error) {
+      console.error('Error connecting to Logseq:', error);
+      alert('连接 Logseq 失败，请确保：\n1. Logseq 已启动\n2. HTTP Server 已开启\n3. Token 配置正确\n\n' + error.message);
     }
   });
 });
