@@ -1,7 +1,9 @@
 <!DOCTYPE html>
-<html>
+<html lang="zh">
 <head>
   <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ZSXQ AI Explainer</title>
   <link rel="stylesheet" href="popup.css">
 </head>
 <body>
@@ -15,6 +17,7 @@
       <div class="tab-buttons">
         <button class="tab-btn active" data-tab="model">模型配置</button>
         <button class="tab-btn" data-tab="prompt">提示词设置</button>
+        <button class="tab-btn" data-tab="logseqConfig">笔记同步</button>
       </div>
 
       <div class="tab-content">
@@ -47,6 +50,14 @@
           <label for="systemPrompt">提示词 (Prompt):</label>
           <textarea id="systemPrompt" rows="12" placeholder="输入自定义提示词"></textarea>
           <button id="resetPrompt">重置默认提示词</button>
+        </div>
+
+        <div class="tab-pane" id="logseqConfig">
+          <label for="logseqGraphPath">Logseq Graph:</label>
+          <div class="folder-select">
+            <input id="logseqGraphPath" readonly disabled placeholder="请安装 Logseq 插件">
+            <button id="selectFolder" type="button" class="folder-btn">连接 Logseq</button>
+          </div>
         </div>
       </div>
     </div>

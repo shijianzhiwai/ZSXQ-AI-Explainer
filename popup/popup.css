@@ -145,3 +145,22 @@ input, textarea {
   border-color: #1890ff;
   box-shadow: 0 0 0 2px rgba(24,144,255,0.2);
 }
+
+.folder-select {
+  display: flex;
+  gap: 8px;
+  align-items: stretch;
+  margin-bottom: 16px;
+}
+
+.folder-select input {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.folder-btn {
+  padding: 4px 8px;
+  white-space: nowrap;
+  height: 100%;
+  align-self: center;
+}
