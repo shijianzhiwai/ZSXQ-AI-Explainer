@@ -178,3 +178,147 @@ async function syncOpenAIModels(apiKey, baseUrl = 'https://api.openai.com') {
     throw new Error('无法获取 OpenAI 模型列表，请检查 API Key 和 Base URL 是否正确');
   }
 }
+
+async function syncToLogseq(content) {
+  const { logseqToken, logseqGraphPath } = await chrome.storage.local.get(['logseqToken', 'logseqGraphPath']);
+  
+  if (!logseqToken || !logseqGraphPath) {
+    throw new Error('请先在插件设置中配置 Logseq Token 和 Graph');
+  }
+
+  const { apiKey, openaiKey, openaiBaseUrl } = await chrome.storage.sync.get(['apiKey', 'openaiKey', 'openaiBaseUrl']);
+
+  const { selectedModel } = await chrome.storage.local.get('selectedModel');
+
+  // 使用 AI 将内容转换为 Logseq 格式
+  const API_ENDPOINT = selectedModel.provider === 'openai' 
+    ? `${openaiBaseUrl || 'https://api.openai.com'}/v1/chat/completions`
+    : 'https://api.deepseek.com/v1/chat/completions';
+
+  const formatPrompt = `请将以下内容转换为 Logseq 的大纲笔记格式，并以 JSON 格式输出。要求：
+1. 提取一句话标题，并添加 #南半球聊财经 标签
+2. 保留原文的总结内容
+3. 将经济学术语用 [[术语名]] 格式标记，创建反向链接
+4. 保留因果关系分析
+5. 保留延伸思考
+
+输出 JSON 格式示例：
+{
+  "title": "标题 #南半球聊财经",
+  "summary": "总结内容",
+  "terms": ["[[术语1]]: 解释", "[[术语2]]: 解释"],
+  "causality": ["因果关系1", "因果关系2"],
+  "thoughts": ["延伸思考1", "延伸思考2"]
+}
+
+以下是需要转换的内容：
+${content}`;
+
+  if (selectedModel.id == "deepseek-reasoner") {
+    selectedModel.id = "deepseek-chat"
+  }
+
+  try {
+    const response = await fetch(API_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${selectedModel.provider === 'openai' ? openaiKey : apiKey}`
+      },
+      body: JSON.stringify({
+        model: selectedModel.id,
+        messages: [
+          {
+            role: 'system',
+            content: '你是一个专业的笔记格式转换助手'
+          },
+          {
+            role: 'user',
+            content: formatPrompt
+          }
+        ],
+        temperature: 0.7,
+        response_format: { type: "json_object" }
+      })
+    });
+
+    if (!response.ok) {
+      throw new Error('AI 格式转换失败');
+    }
+
+    const result = await response.json();
+    const formattedContent = JSON.parse(result.choices[0].message.content);
+
+    // 生成今天的日记页面标题
+    const date = new Date();
+    const months = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+    const month = months[date.getMonth()];
+    const day = date.getDate();
+    const year = date.getFullYear();
+    const pageTitle = `${month} ${day}${getDaySuffix(day)}, ${year}`;
+
+    // 构建块结构
+    const blocks = [
+      {
+        content: '**总结：**' + formattedContent.summary,
+      },
+      {
+        content: '**经济学术语**',
+        children: formattedContent.terms.map(term => ({ content: term }))
+      },
+      {
+        content: '**因果关系分析**',
+        children: formattedContent.causality.map(cause => ({ content: cause }))
+      },
+      {
+        content: '**延伸思考**',
+        children: formattedContent.thoughts.map(thought => ({ content: thought }))
+      }
+    ];
+
+    const targetBlock = await requestLogseq('logseq.Editor.insertBlock', [pageTitle, formattedContent.title, { before: true }], logseqToken)
+
+    // 使用 insertBatchBlock 插入块
+    const createPageResponse = await requestLogseq('logseq.Editor.insertBatchBlock', [targetBlock.uuid, blocks, { sibling: false }], logseqToken)
+
+    return createPageResponse;
+  } catch (error) {
+    console.error('Format and sync error:', error);
+    throw error;
+  }
+}
+
+// 辅助函数：获取日期的后缀(1st, 2nd, 3rd, 4th等)
+function getDaySuffix(day) {
+  if (day >= 11 && day <= 13) {
+    return 'th';
+  }
+  switch (day % 10) {
+    case 1: return 'st';
+    case 2: return 'nd';
+    case 3: return 'rd';
+    default: return 'th';
+  }
+}
+
+async function requestLogseq(method, args, logseqToken) {
+  const errText = 'Logseq 请求失败，请确保 Logseq 已启动且 HTTP Server 正在运行，并且 Token 配置正确';
+  try {
+    const response = await fetch('http://127.0.0.1:12315/api', {
+        method: 'POST',
+        headers: {
+        'Authorization': `Bearer ${logseqToken}`,
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ method, args })
+    });
+  
+    if (!response.ok) {
+      throw new Error(errText + '，错误码：' + response.status);
+    }
+
+    return await response.json();
+  } catch (error) {
+    throw new Error(errText);
+  }
+}

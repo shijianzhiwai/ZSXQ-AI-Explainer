@@ -1,3 +1,6 @@
+
+const SYNC_LOGSEQ_BTN_TEXT = '👉 同步到笔记';
+
 // 创建基础弹窗结构
 function createPopupElement(content, isError, modelName, settings) {
   const popup = document.createElement('div');
@@ -9,7 +12,10 @@ function createPopupElement(content, isError, modelName, settings) {
         <span>AI 解释</span>
         <span class="model-name">(${modelName})</span>
       </div>
-      <button class="close-btn">×</button>
+      <div class="header-right">
+        <button class="sync-logseq-btn">${SYNC_LOGSEQ_BTN_TEXT}</button>
+        <button class="close-btn">×</button>
+      </div>
     </div>
     <div class="popup-content ${isError ? 'error' : ''}">${isError ? content : marked.parse(content)}</div>
     <div class="resize-handle"></div>
@@ -65,6 +71,25 @@ function applyPopupStyles(popup, settings, isError) {
     cursor: pointer;
     padding: 0 5px;
     color: #999;
+  `;
+
+  const headerRight = popup.querySelector('.header-right');
+  headerRight.style.cssText = `
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  `;
+
+  const syncBtn = popup.querySelector('.sync-logseq-btn');
+  syncBtn.style.cssText = `
+    background: none;
+    border: none;
+    font-size: 14px;
+    cursor: pointer;
+    padding: 0 5px;
+    color: #666;
+    display: flex;
+    align-items: center;
   `;
 }
 
@@ -188,6 +213,55 @@ function setupDragAndResize(popup, saveSettings) {
   resizeObserver.observe(popup);
 }
 
+// 同步到 Logseq
+function syncToLogseqAction(popup) {
+  // 添加同步按钮事件监听
+  const syncBtn = popup.querySelector('.sync-logseq-btn');
+  syncBtn.addEventListener('click', async () => {
+    try {
+      syncBtn.disabled = true;
+      syncBtn.style.opacity = '0.5';
+      syncBtn.textContent = '同步中...';
+      
+      function restoreSyncBtnText() {
+        syncBtn.textContent = SYNC_LOGSEQ_BTN_TEXT;
+        syncBtn.style.opacity = '1';
+        syncBtn.disabled = false;
+      }
+
+      if (!window.fullContent.done) {
+        throw new Error('内容未完全加载，请稍后再试');
+      }
+
+      await syncToLogseq(window.fullContent.content);
+      
+      // 显示成功提示
+      const successTip = document.createElement('div');
+      successTip.textContent = '✅ 同步成功';
+      successTip.style.cssText = `
+        position: absolute;
+        top: 20%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        background: rgba(0, 0, 0, 0.8);
+        color: white;
+        padding: 8px 16px;
+        border-radius: 4px;
+        font-size: 14px;
+      `;
+      popup.appendChild(successTip);
+      setTimeout(() => {
+        successTip.remove();
+      }, 2000);
+    } catch (error) {
+      console.error('Sync to Logseq failed:', error);
+      alert(error.message);
+    } finally {
+      restoreSyncBtnText();
+    }
+  });
+}
+
 // 主函数
 async function showResultPopup(content, isError = false) {
   const { popupSettings } = await chrome.storage.local.get('popupSettings');
@@ -229,7 +303,7 @@ async function showResultPopup(content, isError = false) {
   }
 
   setupDragAndResize(popup, savePopupSettings);
-
+  syncToLogseqAction(popup);
   popup.querySelector('.close-btn').addEventListener('click', () => {
     popup.remove();
   });

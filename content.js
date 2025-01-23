@@ -12,11 +12,11 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       const contentDiv = popup.querySelector('.popup-content');
 
       // 用于累积完整的 Markdown 文本
-      let fullContent = '';
+      window.fullContent = { done: false, content: '' };
 
       function updateContent(chunk) {
-        fullContent += chunk;
-        contentDiv.innerHTML = marked.parse(fullContent + '\n\n---\n\n*内容由AI生成，可能存在错误，仅供参考*');
+        window.fullContent.content += chunk;
+        contentDiv.innerHTML = marked.parse(window.fullContent.content + '\n\n---\n\n*内容由AI生成，可能存在错误，仅供参考*');
       }
 
       try {
@@ -28,12 +28,13 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
         }
       } catch (error) {
         console.error('Error:', error);
-        
-        if (fullContent) {
+        if (window.fullContent.content) {
           updateContent(error.message);
         } else {
           await showResultPopup('获取内容失败，请重试: ' + error.message, true);
         }
+      } finally {
+        window.fullContent.done = true;
       }
     } else {
       await showResultPopup('未找到有效内容，请在内容区域右键', true);
