@@ -1,82 +1,34 @@
 async function fetchAIExplanation(text) {
-  // 获取存储的配置
-  const { 
-    apiKey, 
-    openaiKey, 
-    openaiBaseUrl
-  } = await chrome.storage.sync.get([
-    'apiKey', 
-    'openaiKey', 
-    'openaiBaseUrl'
-  ]);
 
   const {
-    systemPrompt,
-    selectedModel
+    systemPrompt
   } = await chrome.storage.local.get([
-    'systemPrompt',
-    'selectedModel'
+    'systemPrompt'
   ]);
-
-  if (!selectedModel) {
-    throw new Error('请先选择模型');
-  }
-
-  const isOpenAI = selectedModel.provider === 'openai';
-  
-  if (isOpenAI && !openaiKey) {
-    throw new Error('使用 OpenAI 模型需要配置 OpenAI API Key');
-  }
-  
-  if (!isOpenAI && !apiKey) {
-    throw new Error('使用 DeepSeek 模型需要配置 DeepSeek API Key');
-  }
-
-  const API_ENDPOINT = isOpenAI 
-    ? `${openaiBaseUrl || 'https://api.openai.com'}/v1/chat/completions`
-    : 'https://api.deepseek.com/v1/chat/completions';
 
   const finalPrompt = systemPrompt || DEFAULT_SYSTEM_PROMPT;
 
   try {
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 秒超时
-
-    const response = await fetch(API_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${isOpenAI ? openaiKey : apiKey}`
-      },
-      body: JSON.stringify({
-        model: selectedModel.id,
-        messages: [
-          {
-            role: 'system',
-            content: finalPrompt
-          },
-          {
-            role: 'user',
-            content: text
-          }
-        ],
-        stream: true
-      }),
-      signal: controller.signal // 添加 AbortSignal
-    });
-
-    clearTimeout(timeoutId); // 请求成功后清除超时计时器
-
-    if (!response.ok) {
-      throw new Error('API request failed: ' + response.status);
-    }
+    const response = await requestAIModelByConfig({
+      messages: [
+        {
+          role: 'system',
+          content: finalPrompt
+        },
+        {
+          role: 'user',
+          content: text
+        }
+      ],
+      stream: true
+    })
 
     const reader = response.body.getReader();
     const decoder = new TextDecoder();
     let content = '';
 
     return {
-      model: selectedModel.id,
+      model: response.selectedModel.id,
       async *[Symbol.asyncIterator]() {
         while (true) {
           const { done, value } = await reader.read();
@@ -186,19 +138,12 @@ async function syncToLogseq(content) {
     throw new Error('请先在插件设置中配置 Logseq Token 和 Graph');
   }
 
-  const { apiKey, openaiKey, openaiBaseUrl } = await chrome.storage.sync.get(['apiKey', 'openaiKey', 'openaiBaseUrl']);
-
   const { selectedModel } = await chrome.storage.local.get('selectedModel');
-
-  // 使用 AI 将内容转换为 Logseq 格式
-  const API_ENDPOINT = selectedModel.provider === 'openai' 
-    ? `${openaiBaseUrl || 'https://api.openai.com'}/v1/chat/completions`
-    : 'https://api.deepseek.com/v1/chat/completions';
 
   const formatPrompt = `请将以下内容转换为 Logseq 的大纲笔记格式，并以 JSON 格式输出。要求：
 1. 提取一句话标题，并添加 #南半球聊财经 标签
 2. 保留原文的总结内容
-3. 将经济学术语用 [[术语名]] 格式标记，创建反向链接
+3. 将经济学术用以下 JSON 格式严格生成转换，在末尾添加 #经济学术语
 4. 保留因果关系分析
 5. 保留延伸思考
 
@@ -206,10 +151,13 @@ async function syncToLogseq(content) {
 {
   "title": "标题 #南半球聊财经",
   "summary": "总结内容",
-  "terms": ["[[术语1]]: 解释", "[[术语2]]: 解释"],
+  "terms": ["术语1: 解释内容 #经济学术语", "术语2: 解释内容 #经济学术语"], # 按照此数组结构即可，不要内部扩容新的结构
   "causality": ["因果关系1", "因果关系2"],
+  "keyword": ["关键词1", "关键词2"] # 关键词包含「术语」、「其他你认为的关键信息词」
   "thoughts": ["延伸思考1", "延伸思考2"]
 }
+
+**不要生成超出以上 JSON 结构之外的字段**
 
 以下是需要转换的内容：
 ${content}`;
@@ -219,32 +167,21 @@ ${content}`;
   }
 
   try {
-    const response = await fetch(API_ENDPOINT, {
-      method: 'POST',
-      headers: {
-        'Content-Type': 'application/json',
-        'Authorization': `Bearer ${selectedModel.provider === 'openai' ? openaiKey : apiKey}`
-      },
-      body: JSON.stringify({
-        model: selectedModel.id,
-        messages: [
-          {
-            role: 'system',
-            content: '你是一个专业的笔记格式转换助手'
-          },
-          {
-            role: 'user',
-            content: formatPrompt
-          }
-        ],
-        temperature: 0.7,
-        response_format: { type: "json_object" }
-      })
-    });
-
-    if (!response.ok) {
-      throw new Error('AI 格式转换失败');
-    }
+    const response = await requestAIModelByConfig({
+      model: selectedModel.id,
+      messages: [
+        {
+          role: 'system',
+          content: '你是一个专业的笔记格式转换助手'
+        },
+        {
+          role: 'user',
+          content: formatPrompt
+        }
+      ],
+      temperature: 0.7,
+      response_format: { type: "json_object" }
+    })
 
     const result = await response.json();
     const formattedContent = JSON.parse(result.choices[0].message.content);
@@ -260,19 +197,19 @@ ${content}`;
     // 构建块结构
     const blocks = [
       {
-        content: '**总结：**' + formattedContent.summary,
+        content: '**总结：**' + createBidirectionalLink(formattedContent.summary, formattedContent.keyword),
       },
       {
         content: '**经济学术语**',
-        children: formattedContent.terms.map(term => ({ content: term }))
+        children: formattedContent.terms.map(term => ({ content: createBidirectionalLink(term, formattedContent.keyword) }))
       },
       {
         content: '**因果关系分析**',
-        children: formattedContent.causality.map(cause => ({ content: cause }))
+        children: formattedContent.causality.map(cause => ({ content: createBidirectionalLink(cause, formattedContent.keyword) }))
       },
       {
         content: '**延伸思考**',
-        children: formattedContent.thoughts.map(thought => ({ content: thought }))
+        children: formattedContent.thoughts.map(thought => ({ content: createBidirectionalLink(thought, formattedContent.keyword) }))
       }
     ];
 
@@ -320,5 +257,86 @@ async function requestLogseq(method, args, logseqToken) {
     return await response.json();
   } catch (error) {
     throw new Error(errText);
+  }
+}
+
+function createBidirectionalLink(content, keyword) {
+  if (keyword.length === 0) {
+    return content;
+  }
+  let result = content;
+  
+  keyword.forEach(term => {
+    const regex = new RegExp(term, 'g');
+    result = result.replace(regex, `[[${term}]]`);
+  });
+  
+  return result;
+}
+
+async function requestAIModelByConfig(body) {
+  const { 
+    apiKey, 
+    openaiKey, 
+    openaiBaseUrl
+  } = await chrome.storage.sync.get([
+    'apiKey', 
+    'openaiKey', 
+    'openaiBaseUrl'
+  ]);
+
+  const {
+    selectedModel
+  } = await chrome.storage.local.get([
+    'selectedModel'
+  ]);
+  if (!selectedModel) {
+    throw new Error('请先选择模型');
+  }
+
+  if (!body.model) {
+    body.model = selectedModel.id;
+  }
+
+  const isOpenAI = selectedModel.provider === 'openai';
+  
+  if (isOpenAI && !openaiKey) {
+    throw new Error('使用 OpenAI 模型需要配置 OpenAI API Key');
+  }
+  
+  if (!isOpenAI && !apiKey) {
+    throw new Error('使用 DeepSeek 模型需要配置 DeepSeek API Key');
+  }
+
+  const API_ENDPOINT = isOpenAI 
+    ? `${openaiBaseUrl || 'https://api.openai.com'}/v1/chat/completions`
+    : 'https://api.deepseek.com/v1/chat/completions';
+
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 120000); // 120 秒超时
+
+    const response = await fetch(API_ENDPOINT, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${isOpenAI ? openaiKey : apiKey}`
+      },
+      body: JSON.stringify(body),
+      signal: controller.signal // 添加 AbortSignal
+    });
+
+    clearTimeout(timeoutId); // 请求成功后清除超时计时器
+
+    if (!response.ok) {
+      throw new Error('API request failed: ' + response.status);
+    }
+    response.selectedModel = selectedModel;
+    return response;
+  } catch (error) {
+    if (error.name === 'AbortError') {
+      throw new Error('请求超时，请稍后重试');
+    }
+    throw error;
   }
 }

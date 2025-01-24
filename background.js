@@ -4,7 +4,7 @@ chrome.runtime.onInstalled.addListener(() => {
     id: "explainContent",
     title: "解释内容",
     contexts: ["all"],
-    documentUrlPatterns: ["*://*.zsxq.com/group/28518511148841"]  // 只在知识星球网站显示
+    documentUrlPatterns: ["*://*.zsxq.com/group/28518511148841*"]  // 只在知识星球网站显示
   });
 });
 
