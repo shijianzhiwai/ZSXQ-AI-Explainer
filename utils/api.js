@@ -149,7 +149,7 @@ async function syncToLogseq(content) {
 
 输出 JSON 格式示例：
 {
-  "title": "标题 #南半球聊财经",
+  "title": "**标题** #南半球聊财经",
   "summary": "总结内容",
   "terms": ["术语1: 解释内容 #经济学术语", "术语2: 解释内容 #经济学术语"], # 按照此数组结构即可，不要内部扩容新的结构
   "causality": ["因果关系1", "因果关系2"],
