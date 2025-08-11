@@ -94,7 +94,7 @@ function applyPopupStyles(popup, settings, isError) {
 }
 
 // 添加样式表
-function addPopupStyles(popup, isError) {
+function addPopupStyles(popup) {
   const style = document.createElement('style');
   style.textContent = `
     .header-left {
@@ -282,7 +282,7 @@ async function showResultPopup(content, isError = false) {
   const modelName = selectedModel?.name || '默认模型';
 
   const popup = createPopupElement(content, isError, modelName, settings);
-  addPopupStyles(popup, isError);
+  addPopupStyles(popup);
 
   if (isError) {
     popup.querySelector('.popup-header').style.backgroundColor = '#fff2f0';
@@ -291,6 +291,66 @@ async function showResultPopup(content, isError = false) {
   }
 
   document.body.appendChild(popup);
+
+  // 添加窗口大小变化监听器，确保弹窗始终可见
+  function ensurePopupVisible() {
+    console.log('ensurePopupVisible');
+    const rect = popup.getBoundingClientRect();
+    const windowHeight = window.innerHeight;
+    const windowWidth = window.innerWidth;
+    
+    let needsUpdate = false;
+    let newWidth = popup.style.width;
+    let newHeight = popup.style.height;
+
+    // 确保弹窗不会超出窗口边界
+    const currentWidth = parseInt(popup.style.width);
+    const currentHeight = parseInt(popup.style.height);
+    
+    // 检查宽度是否超出右侧边界
+    if (rect.right > windowWidth - 20) {
+      const maxWidth = windowWidth - parseInt(popup.style.left) - 20;
+      newWidth = Math.max(300, maxWidth) + 'px'; // 最小宽度300px
+      needsUpdate = true;
+    }
+    
+    // 检查高度是否超出底部边界
+    if (rect.bottom > windowHeight - 20) {
+      const maxHeight = windowHeight - parseInt(popup.style.top) - 20;
+      newHeight = Math.max(200, maxHeight) + 'px'; // 最小高度200px
+      needsUpdate = true;
+    }
+    
+    // 如果弹窗太小，确保最小尺寸
+    const minHeight = 200;
+    const minWidth = 300;
+    if (rect.height < minHeight) {
+      newHeight = minHeight + 'px';
+      needsUpdate = true;
+    }
+    if (rect.width < minWidth) {
+      newWidth = minWidth + 'px';
+      needsUpdate = true;
+    }
+    
+    // 应用尺寸调整
+    if (needsUpdate) {
+      popup.style.width = newWidth;
+      popup.style.height = newHeight;
+      savePopupSettings();
+    }
+  }
+
+  // 监听窗口大小变化
+  const resizeObserver = new ResizeObserver(ensurePopupVisible);
+  resizeObserver.observe(document.body);
+  
+  // 监听窗口resize事件
+  const handleResize = () => {
+    // 延迟执行，确保DOM更新完成
+    setTimeout(ensurePopupVisible, 100);
+  };
+  window.addEventListener('resize', handleResize);
 
   function savePopupSettings() {
     const settings = {
@@ -304,17 +364,27 @@ async function showResultPopup(content, isError = false) {
 
   setupDragAndResize(popup, savePopupSettings);
   syncToLogseqAction(popup);
-  popup.querySelector('.close-btn').addEventListener('click', () => {
+  
+  // 在弹窗关闭时清理事件监听器
+  const closeBtn = popup.querySelector('.close-btn');
+  closeBtn.addEventListener('click', () => {
+    resizeObserver.disconnect();
+    window.removeEventListener('resize', handleResize);
     popup.remove();
   });
 
   if (isError) {
     setTimeout(() => {
       if (document.body.contains(popup)) {
+        resizeObserver.disconnect();
+        window.removeEventListener('resize', handleResize);
         popup.remove();
       }
     }, 5000);
   }
+
+  // 初始检查一次，确保弹窗位置正确
+  setTimeout(ensurePopupVisible, 100);
 
   return popup;
 }
