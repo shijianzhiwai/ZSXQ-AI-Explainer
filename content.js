@@ -6,41 +6,13 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
   if (request.action === "getTextNearCursor") {
     const text = getContentDivText(request.x, request.y);
     if (text) {
-
-      // 创建弹窗但先不显示内容
-      const popup = await showResultPopup('正在加载...', false);
-      const contentDiv = popup.querySelector('.popup-content');
-
-      // 用于累积完整的 Markdown 文本
-      window.fullContent = { done: false, content: '' };
-
-      function updateContent(chunk) {
-        window.fullContent.content += chunk;
-        contentDiv.innerHTML = marked.parse(window.fullContent.content + '\n\n---\n\n*内容由AI生成，可能存在错误，仅供参考*');
-      }
-
-      try {
-        // 流式获取 AI 响应
-        const streamResponse = await fetchAIExplanation(text);
-        
-        for await (const chunk of streamResponse) {
-          updateContent(chunk);
-        }
-      } catch (error) {
-        console.error('Error:', error);
-        if (window.fullContent.content) {
-          updateContent(error.message);
-        } else {
-          await showResultPopup('获取内容失败，请重试: ' + error.message, true);
-        }
-      } finally {
-        window.fullContent.done = true;
-      }
+      await showStreamResponse(text);
     } else {
       await showResultPopup('未找到有效内容，请在内容区域右键', true);
     }
   }
 });
+
 
 // 获取带有 class="content" 的 div 内容
 function getContentDivText(x, y) {

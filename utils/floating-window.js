@@ -452,8 +452,8 @@ class FloatingWindow {
     summaryBtn.textContent = '汇总中...';
 
     try {
-      // 模拟汇总过程
-      await this.simulateSummary();
+      const content = this.contentArray.map(item => item.text).join('\n\n');
+      await showStreamResponse(content, SUMMARY_SYSTEM_PROMPT);
     } catch (error) {
       console.error('汇总失败:', error);
     } finally {
@@ -541,14 +541,3 @@ if (document.readyState === 'loading') {
 } else {
   floatingWindow = new FloatingWindow();
 }
-
-// 导出到全局作用域，方便调试
-window.floatingWindow = floatingWindow;
-
-// 导出内容数组到全局作用域，方便调试和后续使用
-if (floatingWindow) {
-  window.contentArray = floatingWindow.contentArray;
-  window.getAllContent = () => floatingWindow.getAllContent();
-  window.exportContent = () => floatingWindow.exportContent();
-  window.clearContent = () => floatingWindow.clearContent();
-} 

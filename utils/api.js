@@ -1,4 +1,4 @@
-async function fetchAIExplanation(text) {
+async function fetchAIExplanation(text, prompt) {
 
   const {
     systemPrompt
@@ -6,7 +6,10 @@ async function fetchAIExplanation(text) {
     'systemPrompt'
   ]);
 
-  const finalPrompt = systemPrompt || DEFAULT_SYSTEM_PROMPT;
+  let finalPrompt = systemPrompt || DEFAULT_SYSTEM_PROMPT;
+  if (prompt) {
+    finalPrompt = prompt;
+  }
 
   try {
     const response = await requestAIModelByConfig({

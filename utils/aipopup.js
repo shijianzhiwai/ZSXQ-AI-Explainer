@@ -1,6 +1,39 @@
 
 const SYNC_LOGSEQ_BTN_TEXT = '👉 同步到笔记';
 
+
+async function showStreamResponse(text, prompt=null) {
+  // 创建弹窗但先不显示内容
+  const popup = await showResultPopup('正在加载...', false);
+  const contentDiv = popup.querySelector('.popup-content');
+
+  // 用于累积完整的 Markdown 文本
+  window.fullContent = { done: false, content: '' };
+
+  function updateContent(chunk) {
+    window.fullContent.content += chunk;
+    contentDiv.innerHTML = marked.parse(window.fullContent.content + '\n\n---\n\n*内容由AI生成，可能存在错误，仅供参考*');
+  }
+
+  try {
+    // 流式获取 AI 响应
+    const streamResponse = await fetchAIExplanation(text, prompt);
+    
+    for await (const chunk of streamResponse) {
+      updateContent(chunk);
+    }
+  } catch (error) {
+    console.error('Error:', error);
+    if (window.fullContent.content) {
+      updateContent(error.message);
+    } else {
+      await showResultPopup('获取内容失败，请重试: ' + error.message, true);
+    }
+  } finally {
+    window.fullContent.done = true;
+  }
+}
+
 // 创建基础弹窗结构
 function createPopupElement(content, isError, modelName, settings) {
   const popup = document.createElement('div');
@@ -388,6 +421,3 @@ async function showResultPopup(content, isError = false) {
 
   return popup;
 }
-
-// 导出函数
-window.showResultPopup = showResultPopup; 
