@@ -335,10 +335,6 @@ async function showResultPopup(content, isError = false) {
     let needsUpdate = false;
     let newWidth = popup.style.width;
     let newHeight = popup.style.height;
-
-    // 确保弹窗不会超出窗口边界
-    const currentWidth = parseInt(popup.style.width);
-    const currentHeight = parseInt(popup.style.height);
     
     // 检查宽度是否超出右侧边界
     if (rect.right > windowWidth - 20) {

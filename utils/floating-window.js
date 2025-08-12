@@ -13,6 +13,7 @@ class FloatingWindow {
     this.contentArray = []; // 存储抓取的内容数组
     this.isProcessing = false; // 防止重复处理
     this.isCapturing = false; // 抓取状态：true=正在抓取，false=已停止
+    this.resizeTimeout = null; // 窗口大小改变防抖定时器
     this.init();
   }
 
@@ -23,6 +24,8 @@ class FloatingWindow {
     this.bindEvents();
     // 设置初始位置（右上角）
     this.setInitialPosition();
+    // 检查可见性，如果不可见则重新定位
+    this.checkVisibilityAndReposition();
     // 开始监听页面滚动
     this.startScrollListener();
   }
@@ -272,11 +275,135 @@ class FloatingWindow {
     }
   }
 
+  // 检查可见性并重新定位
+  checkVisibilityAndReposition() {
+    // 延迟检查，确保DOM完全渲染
+    setTimeout(() => {
+      if (!this.isElementVisible()) {
+        console.log('悬浮窗口不可见，重新定位到默认位置');
+        this.repositionToDefault();
+      }
+    }, 500);
+  }
+
+  // 检查元素是否可见
+  isElementVisible() {
+    if (!this.floatingWindow) return false;
+    
+    const rect = this.floatingWindow.getBoundingClientRect();
+    const style = window.getComputedStyle(this.floatingWindow);
+    
+    // 检查基本可见性
+    if (style.display === 'none' || style.visibility === 'hidden' || style.opacity === '0') {
+      return false;
+    }
+    
+    // 检查是否在视口内
+    const isInViewport = (
+      rect.top >= 0 &&
+      rect.left >= 0 &&
+      rect.bottom <= window.innerHeight &&
+      rect.right <= window.innerWidth
+    );
+    
+    // 检查元素尺寸
+    const hasSize = rect.width > 0 && rect.height > 0;
+    
+    return isInViewport && hasSize;
+  }
+
+  // 重新定位到默认位置
+  repositionToDefault() {
+    // 清除localStorage中的位置
+    localStorage.removeItem('floating-window-position');
+    
+    // 重置位置变量并设置默认位置
+    this.setDefaultPosition();
+    
+    console.log('悬浮窗口已重新定位到默认位置');
+  }
+
+  // 设置默认位置
+  setDefaultPosition() {
+    const right = 20;
+    const top = 20;
+    const left = window.innerWidth - 100 - right;
+    
+    this.xOffset = left;
+    this.yOffset = top;
+    
+    this.floatingWindow.style.left = left + 'px';
+    this.floatingWindow.style.top = top + 'px';
+  }
+
+  // 处理窗口大小改变
+  handleWindowResize() {
+    // 使用防抖，避免频繁触发
+    clearTimeout(this.resizeTimeout);
+    this.resizeTimeout = setTimeout(() => {
+      this.checkAndAdjustPosition();
+    }, 200);
+  }
+
+  // 检查并调整位置
+  checkAndAdjustPosition() {
+    if (!this.floatingWindow) return;
+    
+    const rect = this.floatingWindow.getBoundingClientRect();
+    const windowWidth = window.innerWidth;
+    const windowHeight = window.innerHeight;
+    
+    let needsReposition = false;
+    let newX = this.xOffset;
+    let newY = this.yOffset;
+    
+    // 检查右边界
+    if (rect.right > windowWidth) {
+      newX = windowWidth - 100 - 20; // 100是窗口宽度，20是右边距
+      needsReposition = true;
+    }
+    
+    // 检查下边界
+    if (rect.bottom > windowHeight) {
+      newY = windowHeight - 150 - 20; // 150是预估高度，20是下边距
+      needsReposition = true;
+    }
+    
+    // 检查左边界
+    if (rect.left < 0) {
+      newX = 20;
+      needsReposition = true;
+    }
+    
+    // 检查上边界
+    if (rect.top < 0) {
+      newY = 20;
+      needsReposition = true;
+    }
+    
+    if (needsReposition) {
+      console.log('窗口大小改变，调整悬浮窗口位置');
+      this.xOffset = newX;
+      this.yOffset = newY;
+      this.floatingWindow.style.left = newX + 'px';
+      this.floatingWindow.style.top = newY + 'px';
+      
+      // 保存新位置
+      localStorage.setItem('floating-window-position', JSON.stringify({
+        x: newX,
+        y: newY
+      }));
+    }
+  }
+
   bindEvents() {
     // 拖拽事件
     this.floatingWindow.addEventListener('mousedown', this.dragStart.bind(this));
     document.addEventListener('mousemove', this.drag.bind(this));
     document.addEventListener('mouseup', this.dragEnd.bind(this));
+
+    // 窗口大小改变事件
+    window.addEventListener('resize', this.handleWindowResize.bind(this));
 
     // 清空按钮事件
     const clearBtn = this.floatingWindow.querySelector('#clear-btn');
