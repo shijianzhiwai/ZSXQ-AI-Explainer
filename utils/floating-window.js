@@ -12,6 +12,7 @@ class FloatingWindow {
     this.contentHashes = new Set(); // 用于存储内容hash，去重
     this.contentArray = []; // 存储抓取的内容数组
     this.isProcessing = false; // 防止重复处理
+    this.isCapturing = false; // 抓取状态：true=正在抓取，false=已停止
     this.init();
   }
 
@@ -37,6 +38,12 @@ class FloatingWindow {
       </div>
       <div class="floating-content">
         <div class="floating-number">0</div>
+        <div class="floating-controls">
+          <button class="floating-clear-btn" id="clear-btn" title="清空抓取">🗑️ 清空</button>
+          <div class="floating-toggle-group">
+            <button class="floating-toggle-btn" id="toggle-btn" title="停止抓取">▶️ 开始</button>
+          </div>
+        </div>
         <button class="floating-summary-btn" id="summary-btn">一键汇总内容</button>
       </div>
     `;
@@ -139,6 +146,77 @@ class FloatingWindow {
         box-shadow: none;
       }
 
+      /* 控制按钮样式 */
+      .floating-controls {
+        display: flex;
+        flex-direction: column;
+        gap: 6px;
+        margin-bottom: 8px;
+      }
+
+      .floating-clear-btn {
+        width: 80%;
+        padding: 4px 8px;
+        background: linear-gradient(135deg, #ff4d4f, #ff7875);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 6px rgba(255, 77, 79, 0.3);
+      }
+
+      .floating-clear-btn:hover {
+        background: linear-gradient(135deg, #ff7875, #ffa39e);
+        transform: translateY(-1px);
+        box-shadow: 0 3px 8px rgba(255, 77, 79, 0.4);
+      }
+
+      .floating-clear-btn:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 6px rgba(255, 77, 79, 0.3);
+      }
+
+      .floating-toggle-group {
+        display: flex;
+        gap: 2px;
+      }
+
+      .floating-toggle-btn {
+        flex: 1;
+        padding: 4px 6px;
+        background: linear-gradient(135deg, #1890ff, #40a9ff);
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 9px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+        box-shadow: 0 2px 6px rgba(24, 144, 255, 0.3);
+      }
+
+      .floating-toggle-btn:hover {
+        background: linear-gradient(135deg, #40a9ff, #69c0ff);
+        transform: translateY(-1px);
+        box-shadow: 0 3px 8px rgba(24, 144, 255, 0.4);
+      }
+
+      .floating-toggle-btn:active {
+        transform: translateY(0);
+        box-shadow: 0 2px 6px rgba(24, 144, 255, 0.3);
+      }
+
+      .floating-toggle-btn.active {
+        background: linear-gradient(135deg, #52c41a, #73d13d);
+      }
+
+      .floating-toggle-btn.active:hover {
+        background: linear-gradient(135deg, #73d13d, #95de64);
+      }
+
       /* 内容标识样式 */
       .content-marker {
         position: absolute;
@@ -199,6 +277,14 @@ class FloatingWindow {
     this.floatingWindow.addEventListener('mousedown', this.dragStart.bind(this));
     document.addEventListener('mousemove', this.drag.bind(this));
     document.addEventListener('mouseup', this.dragEnd.bind(this));
+
+    // 清空按钮事件
+    const clearBtn = this.floatingWindow.querySelector('#clear-btn');
+    clearBtn.addEventListener('click', this.handleClear.bind(this));
+
+    // 开始/停止抓取按钮事件
+    const toggleBtn = this.floatingWindow.querySelector('#toggle-btn');
+    toggleBtn.addEventListener('click', this.handleToggle.bind(this));
 
     // 汇总按钮事件
     const summaryBtn = this.floatingWindow.querySelector('#summary-btn');
@@ -281,7 +367,7 @@ class FloatingWindow {
 
     // 监听滚动事件，使用节流避免频繁触发
     window.addEventListener('scroll', () => {
-      if (isProcessing) return;
+      if (isProcessing || !this.isCapturing) return; // 检查抓取状态
       
       clearTimeout(scrollTimeout);
       scrollTimeout = setTimeout(() => {
@@ -291,7 +377,9 @@ class FloatingWindow {
 
     // 初始处理一次
     setTimeout(() => {
-      this.processScrollContent();
+      if (this.isCapturing) {
+        this.processScrollContent();
+      }
     }, 1000);
   }
 
@@ -444,9 +532,47 @@ class FloatingWindow {
     };
   }
 
+  // 处理清空按钮点击
+  handleClear() {
+    if (this.contentArray.length === 0) {
+      console.log('暂无内容可清空');
+      return;
+    }
+
+    if (confirm(`确定要清空所有抓取的内容吗？\n当前已抓取 ${this.contentArray.length} 条内容`)) {
+      this.clearContent();
+      console.log('所有抓取内容已清空');
+    }
+  }
+
+  // 处理开始/停止抓取按钮点击
+  handleToggle() {
+    const toggleBtn = this.floatingWindow.querySelector('#toggle-btn');
+    
+    this.isCapturing = !this.isCapturing;
+    
+    if (this.isCapturing) {
+      // 开始抓取
+      toggleBtn.textContent = '⏸️ 停止';
+      toggleBtn.title = '停止抓取';
+      toggleBtn.classList.add('active');
+      console.log('开始抓取内容');
+    } else {
+      // 停止抓取
+      toggleBtn.textContent = '▶️ 开始';
+      toggleBtn.title = '开始抓取';
+      toggleBtn.classList.remove('active');
+      console.log('停止抓取内容');
+    }
+  }
+
   // 处理汇总按钮点击
   async handleSummary() {
     // this.exportContent();
+    if (this.contentArray.length === 0) {
+      console.log('暂无内容可汇总');
+      return;
+    }
     const summaryBtn = this.floatingWindow.querySelector('#summary-btn');
     summaryBtn.disabled = true;
     summaryBtn.textContent = '汇总中...';
@@ -500,7 +626,29 @@ class FloatingWindow {
     this.contentArray = [];
     this.contentHashes.clear();
     this.updateNumber(0);
-    console.log('内容数组已清空');
+    
+    // 删除所有页面上的content-marker标记
+    this.removeAllContentMarkers();
+    
+    console.log('内容数组已清空，所有标记已删除');
+  }
+
+  // 删除所有content-marker标记
+  removeAllContentMarkers() {
+    const markers = document.querySelectorAll('.content-marker');
+    markers.forEach(marker => {
+      marker.remove();
+    });
+    
+    // 重置所有内容容器的position样式
+    const contentElements = document.querySelectorAll('.talk-content-container .content');
+    contentElements.forEach(element => {
+      if (element.style.position === 'relative') {
+        element.style.position = '';
+      }
+    });
+    
+    console.log(`已删除 ${markers.length} 个内容标记`);
   }
 
   // 导出内容为JSON
