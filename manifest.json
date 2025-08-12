@@ -28,6 +28,7 @@
         "utils/constants.js",
         "utils/api.js",
         "utils/aipopup.js",
+        "utils/floating-window.js",
         "content.js"
       ]
     }
