@@ -14,6 +14,7 @@ class FloatingWindow {
     this.isProcessing = false; // 防止重复处理
     this.isCapturing = false; // 抓取状态：true=正在抓取，false=已停止
     this.resizeTimeout = null; // 窗口大小改变防抖定时器
+    this.connectionLines = []; // 连接线数组，允许多条线同时存在
     this.init();
   }
 
@@ -250,6 +251,15 @@ class FloatingWindow {
           transform: scale(1);
           opacity: 1;
         }
+      }
+
+      /* 连接线样式 */
+      .connection-line {
+        position: fixed;
+        pointer-events: none;
+        z-index: 9999;
+        opacity: 1;
+        filter: drop-shadow(0 2px 4px rgba(82, 196, 26, 0.3));
       }
     `;
     document.head.appendChild(style);
@@ -559,7 +569,7 @@ class FloatingWindow {
     contentElements.forEach(element => {
       // 检查元素是否在视口内或接近视口
       const rect = element.getBoundingClientRect();
-      const isVisible = rect.top < window.innerHeight && rect.bottom > 0;
+      const isVisible = rect.top < window.innerHeight-100 && rect.bottom > 0;
       
       if (isVisible) {
         newElements.push(element);
@@ -608,6 +618,9 @@ class FloatingWindow {
     
     // 添加到内容元素
     content.appendChild(marker);
+
+    // 创建连接线动画
+    this.createConnectionLine(marker, this.floatingWindow);
   }
 
   // 找到标识的最佳位置
@@ -757,6 +770,14 @@ class FloatingWindow {
     // 删除所有页面上的content-marker标记
     this.removeAllContentMarkers();
     
+    // 清理所有连接线
+    this.connectionLines.forEach(line => {
+      if (line.parentNode) {
+        line.parentNode.removeChild(line);
+      }
+    });
+    this.connectionLines = [];
+    
     console.log('内容数组已清空，所有标记已删除');
   }
 
@@ -799,9 +820,171 @@ class FloatingWindow {
 
   // 销毁悬浮窗口
   destroy() {
+    // 清理所有连接线
+    this.connectionLines.forEach(line => {
+      if (line.parentNode) {
+        line.parentNode.removeChild(line);
+      }
+    });
+    this.connectionLines = [];
+    
     if (this.floatingWindow && this.floatingWindow.parentNode) {
       this.floatingWindow.parentNode.removeChild(this.floatingWindow);
     }
+  }
+
+  // 创建连接线动画
+  createConnectionLine(fromElement, toElement) {
+    // 创建连接线容器
+    const connectionLine = document.createElement('div');
+    connectionLine.className = 'connection-line';
+    
+    // 为每条线生成唯一ID
+    const lineId = 'connection-line-' + Date.now() + '-' + Math.random().toString(36).slice(2, 9);
+    connectionLine.id = lineId;
+    
+    // 保存连接线引用到数组
+    this.connectionLines.push(connectionLine);
+
+    // 创建SVG元素用于绘制线条
+    const svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+    svg.style.cssText = `
+      width: 100%;
+      height: 100%;
+      position: absolute;
+      top: 0;
+      left: 0;
+    `;
+
+    // 创建虚线路径
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.setAttribute('stroke', '#52c41a');
+    path.setAttribute('stroke-width', '2.5');
+    path.setAttribute('fill', 'none');
+    path.setAttribute('stroke-dasharray', '8,6');
+    path.setAttribute('stroke-linecap', 'round');
+
+    svg.appendChild(path);
+    connectionLine.appendChild(svg);
+
+    // 添加到页面
+    document.body.appendChild(connectionLine);
+
+    // 计算位置和尺寸
+    const updateLinePosition = () => {
+      const fromRect = fromElement.getBoundingClientRect();
+      const toRect = toElement.getBoundingClientRect();
+      
+      // 计算连接线的位置和尺寸
+      const fromX = fromRect.left + fromRect.width / 2;
+      const fromY = fromRect.top + fromRect.height / 2;
+
+      // 连接到 floating-window 的左边界
+      const toX = toRect.left;
+      const toY = toRect.top + toRect.height / 2;
+      
+      const lineWidth = Math.abs(toX - fromX);
+      const lineHeight = Math.abs(toY - fromY);
+      
+      // 设置连接线容器的位置和尺寸
+      const left = Math.min(fromX, toX);
+      const top = Math.min(fromY, toY);
+      
+      connectionLine.style.left = left + 'px';
+      connectionLine.style.top = top + 'px';
+      connectionLine.style.width = lineWidth + 'px';
+      connectionLine.style.height = lineHeight + 'px';
+      
+      // 计算SVG的viewBox
+      svg.setAttribute('viewBox', `0 0 ${lineWidth} ${lineHeight}`);
+      
+      // 计算路径坐标（相对于SVG容器）
+      const pathFromX = fromX - left;
+      const pathFromY = fromY - top;
+      const pathToX = toX - left;
+      const pathToY = toY - top;
+      
+      const controlPoint1X = pathFromX + (pathToX - pathFromX) * 0.25;
+      const controlPoint1Y = pathFromY + (pathToY - pathFromY) * 0.1;
+      const controlPoint2X = pathFromX + (pathToX - pathFromX) * 0.75;
+      const controlPoint2Y = pathToY - (pathToY - pathFromY) * 0.1;
+      
+      const pathData = `M ${pathFromX} ${pathFromY} C ${controlPoint1X} ${controlPoint1Y}, ${controlPoint2X} ${controlPoint2Y}, ${pathToX} ${pathToY}`;
+      path.setAttribute('d', pathData);
+    };
+
+    // 初始更新位置
+    updateLinePosition();
+
+    // 动画效果：从起点逐渐绘制到终点的虚线动画
+    const animateLine = () => {
+      // 获取路径总长度
+      const pathLength = path.getTotalLength();
+      
+      // 设置虚线样式：8px实线 + 6px空白
+      const dashLength = 8;
+      const gapLength = 6;
+      const dashArray = `${dashLength},${gapLength}`;
+      
+      path.style.strokeDasharray = dashArray;
+      
+      path.style.strokeDashoffset = pathLength/2;
+      
+      // 强制浏览器重新计算，确保初始状态生效
+      path.getBoundingClientRect();
+      
+      // 开始绘制动画：将偏移量从初始值逐渐减少到0
+      // 这样线条会从起点逐渐绘制到终点
+      path.style.transition = 'stroke-dashoffset 5s cubic-bezier(0.25, 0.46, 0.45, 0.94)';
+      path.style.strokeDashoffset = '0';
+      
+      // 绘制完成后，延迟消失
+      setTimeout(() => {
+        // 渐隐
+        connectionLine.style.transition = 'opacity 0.8s cubic-bezier(0.4, 0, 0.2, 1)';
+        connectionLine.style.opacity = '0';
+        
+        // 完全消失后清理资源
+        setTimeout(() => {
+          if (connectionLine.parentNode) {
+            connectionLine.parentNode.removeChild(connectionLine);
+          }
+          // 清理变量引用
+          connectionLine.remove();
+          svg.remove();
+          path.remove();
+          
+          // 从数组中移除连接线引用
+          const index = this.connectionLines.findIndex(line => line.id === lineId);
+          if (index > -1) {
+            this.connectionLines.splice(index, 1);
+          }
+        }, 800);
+      }, 5000); // 线条绘制完成后等待1500ms再消失
+    };
+
+    // 开始动画
+    animateLine();
+
+    // 监听窗口大小变化，更新线条位置
+    const resizeObserver = new ResizeObserver(() => {
+      updateLinePosition();
+    });
+    
+    // 监听滚动，更新线条位置
+    const scrollHandler = () => {
+      updateLinePosition();
+    };
+    
+    window.addEventListener('scroll', scrollHandler, { passive: true });
+    window.addEventListener('resize', updateLinePosition);
+    
+    // 在动画完成后清理事件监听器
+    setTimeout(() => {
+      resizeObserver.disconnect();
+      window.removeEventListener('scroll', scrollHandler);
+      window.removeEventListener('resize', updateLinePosition);
+    }, 10000); // 10秒后清理，确保动画完成
   }
 }
 
