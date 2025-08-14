@@ -1,12 +1,17 @@
-async function fetchAIExplanation(text, prompt) {
+async function fetchAIExplanation(text, prompt, isSummary = false) {
 
   const {
-    systemPrompt
+    systemPrompt,
+    summaryPrompt,
   } = await chrome.storage.local.get([
-    'systemPrompt'
+    'systemPrompt',
+    'summaryPrompt'
   ]);
 
   let finalPrompt = systemPrompt || DEFAULT_SYSTEM_PROMPT;
+  if (isSummary) {
+    finalPrompt = summaryPrompt || SUMMARY_SYSTEM_PROMPT;
+  }
   if (prompt) {
     finalPrompt = prompt;
   }

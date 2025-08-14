@@ -2,7 +2,7 @@
 const SYNC_LOGSEQ_BTN_TEXT = '👉 同步到笔记';
 
 
-async function showStreamResponse(text, prompt=null) {
+async function showStreamResponse(text, prompt=null, isSummary=false) {
   // 创建弹窗但先不显示内容
   const popup = await showResultPopup('正在加载...', false);
   const contentDiv = popup.querySelector('.popup-content');
@@ -17,7 +17,7 @@ async function showStreamResponse(text, prompt=null) {
 
   try {
     // 流式获取 AI 响应
-    const streamResponse = await fetchAIExplanation(text, prompt);
+    const streamResponse = await fetchAIExplanation(text, prompt, isSummary);
     
     for await (const chunk of streamResponse) {
       updateContent(chunk);

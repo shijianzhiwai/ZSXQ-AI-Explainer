@@ -719,7 +719,7 @@ class FloatingWindow {
 
     try {
       const content = this.contentArray.map(item => item.text).join('\n\n');
-      await showStreamResponse(content, SUMMARY_SYSTEM_PROMPT);
+      await showStreamResponse(content, null, true);
     } catch (error) {
       console.error('汇总失败:', error);
     } finally {

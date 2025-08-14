@@ -47,9 +47,18 @@
 
         <!-- 提示词设置 Tab -->
         <div class="tab-pane" id="prompt">
-          <label for="systemPrompt">提示词 (Prompt):</label>
+          <div class="prompt-type-selector">
+            <div class="button-group">
+              <button type="button" class="type-btn active" data-type="default">单条解释</button>
+              <button type="button" class="type-btn" data-type="summary">汇总解释</button>
+            </div>
+          </div>
+          
           <textarea id="systemPrompt" rows="12" placeholder="输入自定义提示词"></textarea>
-          <button id="resetPrompt">重置默认提示词</button>
+          
+          <div class="prompt-actions">
+            <button id="resetPrompt">重置默认提示词</button>
+          </div>
         </div>
 
         <div class="tab-pane" id="logseqConfig">

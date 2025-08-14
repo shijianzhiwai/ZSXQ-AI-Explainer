@@ -12,17 +12,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
   let {
     systemPrompt,
+    summaryPrompt,
     availableModels,
     selectedModel,
     logseqToken,
     logseqGraphPath
   } = await chrome.storage.local.get([
     'systemPrompt',
+    'summaryPrompt',
     'availableModels',
     'selectedModel',
     'logseqToken',
     'logseqGraphPath'
   ]);
+
+  let promptType = 'default';
 
   // 初始化模型选择器
   const modelSelector = document.getElementById('modelSelector');
@@ -48,10 +52,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('openaiBaseUrl').value = openaiBaseUrl;
   }
   
-  if (systemPrompt) {
-    document.getElementById('systemPrompt').value = systemPrompt;
+  // 设置提示词类型选择器
+  const promptTypeButtons = document.querySelectorAll('.type-btn');
+  promptTypeButtons.forEach(btn => {
+    if (btn.dataset.type === promptType) {
+      btn.classList.add('active');
+    } else {
+      btn.classList.remove('active');
+    }
+  });
+
+  // 设置提示词内容
+  const textarea = document.getElementById('systemPrompt');
+  if (promptType === 'summary') {
+    // 汇总模式：优先使用保存的汇总提示词，否则使用默认汇总提示词
+    if (summaryPrompt) {
+      textarea.value = summaryPrompt;
+    } else {
+      textarea.value = SUMMARY_SYSTEM_PROMPT;
+    }
   } else {
-    document.getElementById('systemPrompt').value = DEFAULT_SYSTEM_PROMPT;
+    // 单条模式：优先使用保存的单条提示词，否则使用默认单条提示词
+    if (systemPrompt) {
+      textarea.value = systemPrompt;
+    } else {
+      textarea.value = DEFAULT_SYSTEM_PROMPT;
+    }
   }
 
   if (logseqToken) {
@@ -66,7 +92,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const apiKey = document.getElementById('apiKey').value.trim();
     const openaiKey = document.getElementById('openaiKey').value.trim();
     let openaiBaseUrl = document.getElementById('openaiBaseUrl').value.trim();
-    const systemPrompt = document.getElementById('systemPrompt').value.trim();
+    const currentPrompt = document.getElementById('systemPrompt').value.trim();
     const logseqToken = document.getElementById('logseqToken').value.trim();
     const logseqGraphPath = document.getElementById('logseqGraphPath').value.trim();
     
@@ -82,6 +108,21 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     openaiBaseUrl = openaiBaseUrl.replace(/\/v1$/, '').replace(/\/$/, '');
 
+    // 保存当前提示词内容到对应的字段
+    if (promptType === 'summary') {
+      if (currentPrompt !== SUMMARY_SYSTEM_PROMPT) {
+        await chrome.storage.local.set({ summaryPrompt: currentPrompt });
+      } else {
+        await chrome.storage.local.remove('summaryPrompt');
+      }
+    } else {
+      if (currentPrompt !== DEFAULT_SYSTEM_PROMPT) {
+        await chrome.storage.local.set({ systemPrompt: currentPrompt });
+      } else {
+        await chrome.storage.local.remove('systemPrompt');
+      }
+    }
+
     // 分别存储到 sync 和 local
     await Promise.all([
       chrome.storage.sync.set({ 
@@ -90,7 +131,6 @@ document.addEventListener('DOMContentLoaded', async () => {
         openaiBaseUrl
       }),
       chrome.storage.local.set({
-        systemPrompt,
         logseqToken,
         logseqGraphPath
       })
@@ -103,15 +143,83 @@ document.addEventListener('DOMContentLoaded', async () => {
     alert('配置已保存');
   });
 
-  // 重置提示词
+  // 提示词类型切换事件
+  promptTypeButtons.forEach(btn => {
+    btn.addEventListener('click', async (e) => {
+      const newPromptType = e.target.dataset.type;
+      const oldPromptType = promptType;
+      
+      // 如果点击的是当前已激活的按钮，不做任何操作
+      if (newPromptType === oldPromptType) {
+        return;
+      }
+      
+      promptType = newPromptType;
+      
+      // 更新按钮状态
+      promptTypeButtons.forEach(b => b.classList.remove('active'));
+      e.target.classList.add('active');
+      
+      // 保存当前提示词内容到内存变量（不保存到存储）
+      const textarea = document.getElementById('systemPrompt');
+      const currentContent = textarea.value.trim();
+      
+      if (oldPromptType === 'summary') {
+        // 保存汇总提示词到内存变量
+        if (currentContent !== SUMMARY_SYSTEM_PROMPT) {
+          summaryPrompt = currentContent;
+        } else {
+          summaryPrompt = null;
+        }
+      } else {
+        // 保存单条提示词到内存变量
+        if (currentContent !== DEFAULT_SYSTEM_PROMPT) {
+          systemPrompt = currentContent;
+        } else {
+          systemPrompt = null;
+        }
+      }
+      
+      // 加载新类型的提示词内容
+      if (newPromptType === 'summary') {
+        if (summaryPrompt) {
+          textarea.value = summaryPrompt;
+        } else {
+          textarea.value = SUMMARY_SYSTEM_PROMPT;
+        }
+      } else {
+        if (systemPrompt) {
+          textarea.value = systemPrompt;
+        } else {
+          textarea.value = DEFAULT_SYSTEM_PROMPT;
+        }
+      }
+      
+      // 不保存提示词类型到存储，等到点击保存按钮时再保存
+    });
+  });
+
+  // 重置提示词（根据当前选择的类型）
   document.getElementById('resetPrompt').addEventListener('click', async () => {
-    const confirmed = confirm('确定要重置为默认提示词吗？这将覆盖当前的自定义提示词。');
+    const currentPromptType = document.querySelector('.type-btn.active').dataset.type;
+    const promptTypeText = currentPromptType === 'summary' ? '汇总提示词' : '默认提示词';
+    
+    const confirmed = confirm(`确定要重置${promptTypeText}吗？这将覆盖当前的自定义提示词。`);
     
     if (confirmed) {
       const textarea = document.getElementById('systemPrompt');
-      textarea.value = DEFAULT_SYSTEM_PROMPT;
-      await chrome.storage.local.remove('systemPrompt');
-      alert('提示词已重置为默认值');
+      
+      if (currentPromptType === 'summary') {
+        textarea.value = SUMMARY_SYSTEM_PROMPT;
+        // 清除汇总提示词的自定义内容
+        await chrome.storage.local.remove('summaryPrompt');
+      } else {
+        textarea.value = DEFAULT_SYSTEM_PROMPT;
+        // 清除单条提示词的自定义内容
+        await chrome.storage.local.remove('systemPrompt');
+      }
+      
+      alert(`${promptTypeText}已重置`);
     }
   });
 
