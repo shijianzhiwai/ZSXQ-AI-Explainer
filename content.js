@@ -4,15 +4,26 @@ console.log('ZSXQ Extension version:', chrome.runtime.getManifest().version);
 // 监听来自 background.js 的消息
 chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
   if (request.action === "getTextNearCursor") {
-    const text = getContentDivText(request.x, request.y);
-    if (text) {
-      await showStreamResponse(text);
+    const record = getContentRecordNearCursor(request.x, request.y);
+    if (record) {
+      await showStreamResponse(record.ai_payload || record.text);
     } else {
       await showResultPopup('未找到有效内容，请在内容区域右键', true);
     }
   }
 });
 
+
+function getContentRecordNearCursor(x, y) {
+  const text = getContentDivText(x, y);
+
+  if (typeof ZSXQContentExtractor !== 'undefined') {
+    return ZSXQContentExtractor.extractPostAt(x, y);
+  }
+
+  if (!text) return null;
+  return { text, ai_payload: text, images: [], tags: [] };
+}
 
 // 获取带有 class="content" 的 div 内容
 function getContentDivText(x, y) {

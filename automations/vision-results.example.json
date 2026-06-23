@@ -1,0 +1,23 @@
+{
+  "date": "2026-06-23",
+  "results": [
+    {
+      "image_id": "POST_ID-1",
+      "image_kind": "chart",
+      "chart_summary": "沪深300近一月走势，6月中旬反弹后横盘，成交量较前期萎缩。",
+      "include_in_summary": true
+    },
+    {
+      "image_id": "POST_ID-2",
+      "image_kind": "text",
+      "ocr_text": "补充 OCR 漏识别的正文要点……",
+      "include_in_summary": true
+    },
+    {
+      "image_id": "POST_ID-3",
+      "image_kind": "photo",
+      "include_in_summary": false,
+      "notes": "风景/人物照，与主题无关"
+    }
+  ]
+}

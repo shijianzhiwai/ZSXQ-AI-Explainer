@@ -18,6 +18,7 @@
         <button class="tab-btn active" data-tab="model">模型配置</button>
         <button class="tab-btn" data-tab="prompt">提示词设置</button>
         <button class="tab-btn" data-tab="logseqConfig">笔记同步</button>
+        <button class="tab-btn" data-tab="pipeline">每日流水线</button>
       </div>
 
       <div class="tab-content">
@@ -81,6 +82,29 @@
             </ol>
             <p class="tip-link">详细说明请参考：<a href="https://docs.logseq.com/#/page/local%20http%20server" target="_blank">Logseq HTTP Server 文档</a></p>
           </div>
+        </div>
+
+        <div class="tab-pane" id="pipeline">
+          <label for="inboxServerUrl">本地 Inbox 服务（推荐）:</label>
+          <input id="inboxServerUrl" placeholder="http://127.0.0.1:3921">
+          <label for="exportLookbackHours">首次导出回看时长（小时）:</label>
+          <input id="exportLookbackHours" type="number" min="1" max="720" placeholder="48">
+          <label for="exportMaxPosts">单次导出上限（条）:</label>
+          <input id="exportMaxPosts" type="number" min="1" max="200" placeholder="50">
+          <label for="lastExportCheckpoint">上次导出截止点:</label>
+          <input id="lastExportCheckpoint" readonly disabled placeholder="首次导出后自动记录">
+          <button id="resetExportCheckpoint" type="button" class="sync-btn">重置截止点</button>
+          <div class="tips">
+            <p>📦 增量导出：</p>
+            <ol>
+              <li>终端运行 <code>node scripts/local-inbox-server.mjs</code></li>
+              <li>打开星球主题页，点悬浮窗「导出增量」（自动滚动抓取）</li>
+              <li>有截止点 → 导出截止点之后；无截止点 → 导出近 N 小时（默认 48h）</li>
+              <li>终端运行 <code>node scripts/build-daily-pipeline.mjs</code> 生成 HTML</li>
+            </ol>
+            <p class="tip-link">说明见 <code>docs/DAILY-PIPELINE.md</code></p>
+          </div>
+          <button id="testInboxServer" type="button" class="sync-btn">测试 Inbox 连接</button>
         </div>
       </div>
     </div>

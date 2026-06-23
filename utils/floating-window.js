@@ -13,6 +13,7 @@ class FloatingWindow {
     this.contentArray = []; // 存储抓取的内容数组
     this.isProcessing = false; // 防止重复处理
     this.isCapturing = false; // 抓取状态：true=正在抓取，false=已停止
+    this.isAutoScrolling = false;
     this.resizeTimeout = null; // 窗口大小改变防抖定时器
     this.connectionLines = []; // 连接线数组，允许多条线同时存在
     this.init();
@@ -49,6 +50,9 @@ class FloatingWindow {
           </div>
         </div>
         <button class="floating-summary-btn" id="summary-btn">一键汇总内容</button>
+        <button class="floating-export-btn" id="export-btn">导出 JSON</button>
+        <button class="floating-daily-btn" id="daily-btn">导出增量</button>
+        <button class="floating-copy-btn" id="copy-btn">复制 JSON</button>
       </div>
     `;
 
@@ -64,7 +68,7 @@ class FloatingWindow {
     style.textContent = `
       #floating-window {
         position: fixed;
-        width: 100px;
+        width: 110px;
         background: #ffffff;
         border: 2px solid #4a90e2;
         border-radius: 10px;
@@ -147,6 +151,57 @@ class FloatingWindow {
         background: #6c757d;
         cursor: not-allowed;
         transform: none;
+        box-shadow: none;
+      }
+
+      .floating-export-btn,
+      .floating-daily-btn,
+      .floating-copy-btn {
+        width: 80%;
+        padding: 6px 8px;
+        margin: 4px auto 0;
+        display: block;
+        color: white;
+        border: none;
+        border-radius: 4px;
+        font-size: 10px;
+        font-weight: 500;
+        cursor: pointer;
+        transition: all 0.3s ease;
+      }
+
+      .floating-export-btn {
+        background: linear-gradient(135deg, #722ed1, #9254de);
+        box-shadow: 0 2px 6px rgba(114, 46, 209, 0.3);
+      }
+
+      .floating-export-btn:hover {
+        background: linear-gradient(135deg, #531dab, #722ed1);
+      }
+
+      .floating-daily-btn {
+        background: linear-gradient(135deg, #fa8c16, #ffa940);
+        box-shadow: 0 2px 6px rgba(250, 140, 22, 0.3);
+      }
+
+      .floating-daily-btn:hover {
+        background: linear-gradient(135deg, #d46b08, #fa8c16);
+      }
+
+      .floating-copy-btn {
+        background: linear-gradient(135deg, #13c2c2, #36cfc9);
+        box-shadow: 0 2px 6px rgba(19, 194, 194, 0.3);
+      }
+
+      .floating-copy-btn:hover {
+        background: linear-gradient(135deg, #08979c, #13c2c2);
+      }
+
+      .floating-export-btn:disabled,
+      .floating-daily-btn:disabled,
+      .floating-copy-btn:disabled {
+        background: #6c757d;
+        cursor: not-allowed;
         box-shadow: none;
       }
 
@@ -427,13 +482,22 @@ class FloatingWindow {
     const summaryBtn = this.floatingWindow.querySelector('#summary-btn');
     summaryBtn.addEventListener('click', this.handleSummary.bind(this));
 
+    const exportBtn = this.floatingWindow.querySelector('#export-btn');
+    exportBtn.addEventListener('click', this.handleExport.bind(this));
+
+    const dailyBtn = this.floatingWindow.querySelector('#daily-btn');
+    dailyBtn.addEventListener('click', this.handleDailyExport.bind(this));
+
+    const copyBtn = this.floatingWindow.querySelector('#copy-btn');
+    copyBtn.addEventListener('click', this.handleCopy.bind(this));
+
     // 防止拖拽时选中文本
     this.floatingWindow.addEventListener('selectstart', (e) => e.preventDefault());
   }
 
   dragStart(e) {
-    if (e.target.closest('.floating-summary-btn')) {
-      return; // 如果点击的是按钮，不启动拖拽
+    if (e.target.closest('.floating-summary-btn, .floating-export-btn, .floating-daily-btn, .floating-copy-btn, .floating-clear-btn, .floating-toggle-btn')) {
+      return;
     }
 
     this.initialX = e.clientX - this.xOffset;
@@ -522,42 +586,83 @@ class FloatingWindow {
 
   // 处理滚动内容
   async processScrollContent() {
-    if (this.isProcessing) return;
+    if (this.isProcessing || this.isAutoScrolling) return;
     this.isProcessing = true;
 
     try {
-      const newContents = this.getNewContentElements();
-      let hasNewContent = false;
-
-      for (const content of newContents) {
-        const hash = await this.generateContentHash(content);
-        
-        if (!this.contentHashes.has(hash)) {
-          this.contentHashes.add(hash);
-          hasNewContent = true;
-          
-          // 提取内容信息并保存到数组
-          const contentInfo = this.extractContentInfo(content, hash);
-          this.contentArray.push(contentInfo);
-          
-          console.log('发现新内容:', contentInfo.text.substring(0, 50) + '...');
-          console.log('内容数组长度:', this.contentArray.length);
-          
-          // 为新内容添加标识
-          this.addContentMarker(content);
-        }
-      }
-
-      if (hasNewContent) {
-        this.updateNumber(this.contentHashes.size);
-        console.log('内容总数更新为:', this.contentHashes.size);
-        console.log('已保存内容数量:', this.contentArray.length);
-      }
+      await this.ingestContentElements(this.getNewContentElements());
     } catch (error) {
       console.error('处理滚动内容时出错:', error);
     } finally {
       this.isProcessing = false;
     }
+  }
+
+  async ingestContentElements(elements, { skipMarkers = false } = {}) {
+    let newCount = 0;
+
+    for (const content of elements) {
+      const record = ZSXQContentExtractor.extractPostRecord(content);
+      const hash = ZSXQContentExtractor.hashRecord(record);
+
+      if (!this.contentHashes.has(hash)) {
+        this.contentHashes.add(hash);
+        newCount += 1;
+
+        const contentInfo = this.extractContentInfo(content, hash, record);
+        this.contentArray.push(contentInfo);
+
+        const imageHint = record.images.length ? ` [${record.images.length}图]` : '';
+        console.log('发现新内容:', record.text.substring(0, 50) + '...' + imageHint);
+
+        if (!skipMarkers) {
+          this.addContentMarker(content);
+        }
+      }
+    }
+
+    if (newCount > 0) {
+      this.updateNumber(this.contentHashes.size);
+    }
+
+    return newCount;
+  }
+
+  /** 从当前 DOM 采集已加载帖子（不依赖「开始」开关） */
+  async captureLoadedPostsFromDom() {
+    const elements = typeof ZSXQAutoScrollCapture !== 'undefined'
+      ? ZSXQAutoScrollCapture.getOrderedPostElements()
+      : [...document.querySelectorAll('.talk-content-container .content')];
+    return this.ingestContentElements(elements, { skipMarkers: true });
+  }
+
+  /** 导出/复制前确保有数据；返回是否可用 */
+  async ensureContentForExport() {
+    if (this.contentArray.length > 0) return true;
+    const added = await this.captureLoadedPostsFromDom();
+    if (this.contentArray.length > 0) {
+      console.log(`[导出] 已从当前页面采集 ${added} 条新帖子（共 ${this.contentArray.length} 条）`);
+      return true;
+    }
+    return false;
+  }
+
+  async autoScrollCaptureWindow(windowStart, onProgress, maxPosts) {
+    const wasCapturing = this.isCapturing;
+    this.isCapturing = true;
+    this.isAutoScrolling = true;
+    try {
+      return await ZSXQAutoScrollCapture.captureInWindow(this, { windowStart, maxPosts, onProgress });
+    } finally {
+      this.isAutoScrolling = false;
+      this.isCapturing = wasCapturing;
+    }
+  }
+
+  /** @deprecated */
+  async autoScrollCaptureToday(dateStr, onProgress) {
+    const exportWindow = await ZSXQDailyExport.getExportWindow();
+    return this.autoScrollCaptureWindow(exportWindow.start, onProgress);
   }
 
   // 获取新的内容元素
@@ -581,19 +686,8 @@ class FloatingWindow {
 
   // 生成内容hash（简化版MD5）
   async generateContentHash(content) {
-    // 使用简单的hash算法，实际项目中可以使用真正的MD5库
-    const text = content.textContent || content.innerHTML || '';
-    let hash = 0;
-    
-    if (text.length === 0) return hash.toString();
-    
-    for (let i = 0; i < text.length; i++) {
-      const char = text.charCodeAt(i);
-      hash = ((hash << 5) - hash) + char;
-      hash = hash & hash; // 转换为32位整数
-    }
-    
-    return hash.toString();
+    const record = ZSXQContentExtractor.extractPostRecord(content);
+    return ZSXQContentExtractor.hashRecord(record);
   }
 
   // 为内容添加标识
@@ -647,28 +741,61 @@ class FloatingWindow {
     }
   }
 
-  // 提取内容信息
-  extractContentInfo(content, hash) {
+  // 提取内容信息（目标 JSON 格式）
+  extractContentInfo(content, hash, record = null) {
     const rect = content.getBoundingClientRect();
-    const parentContainer = content.closest('.talk-content-container');
-    
+    const data = record || ZSXQContentExtractor.extractPostRecord(content);
+
     return {
-      id: hash, // 唯一标识
-      text: content.textContent || '', // 纯文本内容
-      html: content.innerHTML || '', // HTML内容
-      timestamp: Date.now(), // 抓取时间戳
+      ...data,
+      id: data.topic_id || hash,
+      captured_at: Date.now(),
       position: {
         x: rect.left,
         y: rect.top,
         width: rect.width,
         height: rect.height
-      },
-      parentInfo: parentContainer ? {
-        hasImage: !!parentContainer.querySelector('img'),
-        hasLink: !!parentContainer.querySelector('a'),
-        hasGallery: !!parentContainer.querySelector('.image-gallery-container')
-      } : {},
-      element: content // 保留DOM元素引用（可选，用于后续操作）
+      }
+    };
+  }
+
+  async getExportPayload({ embedImages = true } = {}) {
+    const rawContents = this.contentArray.map(({ position, ...item }) => item);
+
+    if (!embedImages) {
+      return {
+        source: 'zsxq',
+        exportTime: new Date().toISOString(),
+        totalCount: rawContents.length,
+        contents: rawContents
+      };
+    }
+
+    const contents = [];
+    for (const item of rawContents) {
+      const normalizedText = item.text.replace(/\s+/g, ' ').trim();
+      const liveContent = [...document.querySelectorAll('.talk-content-container .content')].find(
+        (el) => el.textContent.replace(/\s+/g, ' ').trim() === normalizedText
+      );
+      const live = liveContent ? ZSXQContentExtractor.extractPostRecord(liveContent) : null;
+      const liveScope = liveContent ? ZSXQContentExtractor.getPostScope(liveContent) : null;
+      const images = live?.images?.length ? live.images : item.images;
+      const resolvedImages = await ZSXQContentExtractor.resolveImages(images, liveScope);
+      const enriched = {
+        ...item,
+        author: live?.author || item.author,
+        published_at: live?.published_at || item.published_at,
+        images: resolvedImages
+      };
+      enriched.ai_payload = ZSXQContentExtractor.buildAiPayload(enriched);
+      contents.push(enriched);
+    }
+
+    return {
+      source: 'zsxq',
+      exportTime: new Date().toISOString(),
+      totalCount: contents.length,
+      contents
     };
   }
 
@@ -718,7 +845,9 @@ class FloatingWindow {
     summaryBtn.textContent = '汇总中...';
 
     try {
-      const content = this.contentArray.map(item => item.text).join('\n\n');
+      const content = this.contentArray
+        .map((item) => item.ai_payload || item.text)
+        .join('\n\n---\n\n');
       await showStreamResponse(content, null, true);
     } catch (error) {
       console.error('汇总失败:', error);
@@ -728,14 +857,125 @@ class FloatingWindow {
     }
   }
 
-  // 模拟汇总过程
-  async simulateSummary() {
-    return new Promise((resolve) => {
+  async handleDailyExport() {
+    const { exportWindow, maxPosts } = await ZSXQDailyExport.getExportConfig();
+    const dateStr = ZSXQDailyExport.todayDateString();
+    const windowLabel = `${ZSXQDailyExport.formatWindowLabel(exportWindow)}，最多 ${maxPosts} 条`;
+    const dailyBtn = this.floatingWindow.querySelector('#daily-btn');
+    dailyBtn.disabled = true;
+    dailyBtn.textContent = '抓取中...';
+
+    try {
+      const scrollResult = await this.autoScrollCaptureWindow(
+        exportWindow.start,
+        ({ inWindowCount, step }) => {
+          dailyBtn.textContent = `抓取 ${inWindowCount}/${maxPosts}…`;
+          if (step % 5 === 0) {
+            console.log(`[导出增量] 滚动第 ${step} 步，${inWindowCount}/${maxPosts} 帖（${windowLabel}）`);
+          }
+        },
+        maxPosts
+      );
+
+      const windowItems = ZSXQDailyExport.filterByWindow(this.contentArray, exportWindow.start, maxPosts);
+      if (windowItems.length === 0) {
+        alert(`导出窗口内未找到帖子。\n范围：${windowLabel}\n已扫描 ${scrollResult.totalCaptured} 条 DOM 记录。`);
+        return;
+      }
+
+      dailyBtn.textContent = '导出中...';
+
+      const enriched = await ZSXQDailyExport.enrichPostsInWindow(
+        this.contentArray,
+        exportWindow.start,
+        maxPosts
+      );
+      const group = enriched[0]?.group || ZSXQContentExtractor.getGroupName();
+      const manifest = ZSXQDailyExport.buildManifest(enriched, {
+        date: dateStr,
+        group,
+        exportTime: new Date().toISOString(),
+        exportWindow,
+        maxPosts,
+        checkpointAfter: ZSXQDailyExport.maxPublishedAt(enriched)?.toISOString() || null
+      });
+      const images = ZSXQDailyExport.collectImagePayloads(enriched);
+
+      const response = await chrome.runtime.sendMessage({
+        action: 'saveDailyBundle',
+        payload: { date: dateStr, manifest, images, mode: 'auto' }
+      });
+
+      if (!response?.ok) {
+        throw new Error(response?.error || '导出失败');
+      }
+
+      const checkpointAfter = await ZSXQDailyExport.saveExportCheckpoint(enriched);
+      if (checkpointAfter) {
+        manifest.checkpoint_after = checkpointAfter;
+      }
+
+      const method = response.result?.method || 'unknown';
+      const msg = method === 'inbox'
+        ? `增量内容已写入仓库 inbox（${manifest.post_count} 帖，${manifest.image_count} 图）`
+        : `增量内容已下载到 daily-inbox/${dateStr}/（${manifest.post_count} 帖，${manifest.image_count} 图）`;
+      alert(`${msg}\n\n范围：${windowLabel}\n新截止点：${checkpointAfter || '—'}`);
+      console.log('Incremental export result:', response.result, manifest);
+    } catch (error) {
+      console.error('Incremental export failed:', error);
+      alert(`导出失败：${error.message}`);
+    } finally {
+      dailyBtn.disabled = false;
+      dailyBtn.textContent = '导出增量';
+    }
+  }
+
+  async handleExport() {
+    const exportBtn = this.floatingWindow.querySelector('#export-btn');
+    exportBtn.disabled = true;
+    exportBtn.textContent = '采集中...';
+
+    try {
+      if (!(await this.ensureContentForExport())) {
+        alert('暂无内容可导出。\n\n• 「导出 JSON / 复制 JSON」导出当前页面已加载的帖子\n• 若列表使用虚拟滚动，请先向下滚动加载更多，或点「开始」边滚边抓\n• 需要按时间窗口批量抓取请用「导出增量」');
+        return;
+      }
+
+      exportBtn.textContent = '导出中...';
+      await this.exportContent();
+    } finally {
+      exportBtn.disabled = false;
+      exportBtn.textContent = '导出 JSON';
+    }
+  }
+
+  async handleCopy() {
+    const copyBtn = this.floatingWindow.querySelector('#copy-btn');
+    copyBtn.disabled = true;
+    copyBtn.textContent = '采集中...';
+
+    try {
+      if (!(await this.ensureContentForExport())) {
+        alert('暂无内容可复制。\n\n• 请先向下滚动让帖子出现在页面中\n• 或使用「导出增量」自动滚动抓取');
+        return;
+      }
+
+      copyBtn.textContent = '处理图片...';
+      const exportData = await this.getExportPayload({ embedImages: true });
+      copyBtn.textContent = '复制中...';
+      const json = JSON.stringify(exportData, null, 2);
+      await navigator.clipboard.writeText(json);
+      copyBtn.textContent = '已复制';
+      console.log('JSON 已复制到剪贴板（含 data_url）');
+    } catch (error) {
+      console.error('复制失败:', error);
+      copyBtn.textContent = '复制失败';
+    } finally {
       setTimeout(() => {
-        console.log('内容汇总完成（测试模式）');
-        resolve();
-      }, 2000);
-    });
+        copyBtn.disabled = false;
+        copyBtn.textContent = '复制 JSON';
+      }, 1500);
+    }
   }
 
   // 显示/隐藏悬浮窗口
@@ -756,8 +996,8 @@ class FloatingWindow {
 
   // 获取指定时间范围内的内容
   getContentByTimeRange(startTime, endTime) {
-    return this.contentArray.filter(item => 
-      item.timestamp >= startTime && item.timestamp <= endTime
+    return this.contentArray.filter(item =>
+      item.captured_at >= startTime && item.captured_at <= endTime
     );
   }
 
@@ -800,13 +1040,8 @@ class FloatingWindow {
   }
 
   // 导出内容为JSON
-  exportContent() {
-    const exportData = {
-      exportTime: Date.now(),
-      totalCount: this.contentArray.length,
-      contents: this.contentArray
-    };
-    
+  async exportContent() {
+    const exportData = await this.getExportPayload({ embedImages: true });
     const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' });
     const url = URL.createObjectURL(blob);
     const a = document.createElement('a');
@@ -814,8 +1049,12 @@ class FloatingWindow {
     a.download = `zsxq-content-${Date.now()}.json`;
     a.click();
     URL.revokeObjectURL(url);
-    
-    console.log('内容已导出为JSON文件');
+
+    const embedded = exportData.contents.reduce(
+      (sum, item) => sum + (item.images || []).filter((img) => img.data_url).length,
+      0
+    );
+    console.log(`内容已导出为 JSON（${embedded} 张图片已嵌入 data_url）`, exportData);
   }
 
   // 销毁悬浮窗口
@@ -991,11 +1230,42 @@ class FloatingWindow {
 // 创建并初始化悬浮窗口
 let floatingWindow = null;
 
+function initZsxqExtractorApi() {
+  window.zsxqExtractor = {
+    extractPost: (index) => ZSXQContentExtractor.extractPostByIndex(index),
+    extractPostAt: (x, y) => ZSXQContentExtractor.extractPostAt(x, y),
+    extractAllVisible: () => ZSXQContentExtractor.extractAllVisible(),
+    extractHdImages: async (index = 0) => {
+      const content = document.querySelectorAll('.talk-content-container .content')[index];
+      if (!content) return null;
+      const post = ZSXQContentExtractor.getPostContainer(content);
+      const scope = ZSXQContentExtractor.getPostScope(content);
+      const text = content.textContent.replace(/\s+/g, ' ').trim();
+      return ZSXQContentExtractor.extractImagesWithFallback(post, scope, content, text, { usePreview: true });
+    },
+    getCaptured: () => floatingWindow?.getAllContent() || [],
+    enrichRecord: (record) => ZSXQContentExtractor.enrichRecord(record),
+    cacheStats: () => ({
+      byText: ZSXQTopicImageCache?.byText?.size || 0,
+      byTopicId: ZSXQTopicImageCache?.byTopicId?.size || 0,
+      byImageKey: ZSXQTopicImageCache?.byImageKey?.size || 0
+    }),
+    exportJson: () => floatingWindow?.exportContent(),
+    exportToday: () => floatingWindow?.handleDailyExport(),
+    exportIncremental: () => floatingWindow?.handleDailyExport(),
+    autoScrollWindow: (windowStart) => floatingWindow?.autoScrollCaptureWindow(windowStart),
+    autoScrollToday: () => floatingWindow?.handleDailyExport(),
+    copyJson: () => floatingWindow?.handleCopy()
+  };
+}
+
 // 等待页面加载完成后初始化
 if (document.readyState === 'loading') {
   document.addEventListener('DOMContentLoaded', () => {
     floatingWindow = new FloatingWindow();
+    initZsxqExtractorApi();
   });
 } else {
   floatingWindow = new FloatingWindow();
+  initZsxqExtractorApi();
 }

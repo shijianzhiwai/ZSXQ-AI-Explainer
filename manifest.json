@@ -1,13 +1,14 @@
 {
   "manifest_version": 3,
   "name": "ZSXQ AI Explainer",
-  "version": "0.5.0",
+  "version": "0.8.9",
   "description": "【南半球聊财经】在知识星球中右键解释内容",
   "permissions": [
     "contextMenus",
     "activeTab",
     "storage",
-    "unlimitedStorage"
+    "unlimitedStorage",
+    "downloads"
   ],
   "host_permissions": [
     "<all_urls>"
@@ -23,9 +24,23 @@
   "content_scripts": [
     {
       "matches": ["*://*.zsxq.com/*"],
+      "js": ["utils/topic-image-cache-page.js"],
+      "run_at": "document_start",
+      "world": "MAIN"
+    },
+    {
+      "matches": ["*://*.zsxq.com/*"],
+      "js": ["utils/topic-image-cache.js"],
+      "run_at": "document_start"
+    },
+    {
+      "matches": ["*://*.zsxq.com/*"],
       "js": [
         "lib/marked.min.js",
         "utils/constants.js",
+        "utils/daily-export.js",
+        "utils/auto-scroll-capture.js",
+        "utils/content-extractor.js",
         "utils/api.js",
         "utils/aipopup.js",
         "utils/floating-window.js",

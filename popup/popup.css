@@ -1,7 +1,7 @@
 /* 基础布局 */
 .popup-container {
   position: relative;
-  width: 320px;
+  width: 400px;
   min-height: 400px;
   display: flex;
   flex-direction: column;
@@ -33,15 +33,26 @@
   display: flex;
   border-bottom: 1px solid #ddd;
   margin-bottom: 16px;
+  overflow-x: auto;
+  scrollbar-width: none;
+}
+
+.tab-buttons::-webkit-scrollbar {
+  display: none;
 }
 
 .tab-btn {
-  padding: 8px 16px;
+  flex: 1 1 0;
+  min-width: max-content;
+  padding: 8px 6px;
   border: none;
   background: none;
   cursor: pointer;
-  font-size: 14px;
+  font-size: 12px;
+  line-height: 1.2;
+  white-space: nowrap;
   color: #666;
+  text-align: center;
 }
 
 .tab-btn.active {

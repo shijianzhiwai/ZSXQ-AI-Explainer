@@ -16,14 +16,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     availableModels,
     selectedModel,
     logseqToken,
-    logseqGraphPath
+    logseqGraphPath,
+    inboxServerUrl,
+    exportLookbackHours,
+    exportMaxPosts,
+    lastExportCheckpoint
   } = await chrome.storage.local.get([
     'systemPrompt',
     'summaryPrompt',
     'availableModels',
     'selectedModel',
     'logseqToken',
-    'logseqGraphPath'
+    'logseqGraphPath',
+    'inboxServerUrl',
+    'exportLookbackHours',
+    'exportMaxPosts',
+    'lastExportCheckpoint'
   ]);
 
   let promptType = 'default';
@@ -88,6 +96,15 @@ document.addEventListener('DOMContentLoaded', async () => {
     document.getElementById('logseqGraphPath').value = logseqGraphPath;
   }
 
+  const inboxInput = document.getElementById('inboxServerUrl');
+  if (inboxInput) inboxInput.value = inboxServerUrl || 'http://127.0.0.1:3921';
+  const lookbackInput = document.getElementById('exportLookbackHours');
+  const checkpointInput = document.getElementById('lastExportCheckpoint');
+  if (lookbackInput) lookbackInput.value = exportLookbackHours || 48;
+  const maxPostsInput = document.getElementById('exportMaxPosts');
+  if (maxPostsInput) maxPostsInput.value = exportMaxPosts || 50;
+  if (checkpointInput) checkpointInput.value = lastExportCheckpoint || '';
+
   async function saveConfig() {
     const apiKey = document.getElementById('apiKey').value.trim();
     const openaiKey = document.getElementById('openaiKey').value.trim();
@@ -95,6 +112,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const currentPrompt = document.getElementById('systemPrompt').value.trim();
     const logseqToken = document.getElementById('logseqToken').value.trim();
     const logseqGraphPath = document.getElementById('logseqGraphPath').value.trim();
+    const inboxServerUrl = document.getElementById('inboxServerUrl')?.value.trim() || 'http://127.0.0.1:3921';
+    const exportLookbackHours = Number(document.getElementById('exportLookbackHours')?.value) || 48;
+    const exportMaxPosts = Number(document.getElementById('exportMaxPosts')?.value) || 50;
     
     if (!apiKey && !openaiKey) {
       alert('请输入DeepSeek API Key或OpenAI API Key');
@@ -132,7 +152,10 @@ document.addEventListener('DOMContentLoaded', async () => {
       }),
       chrome.storage.local.set({
         logseqToken,
-        logseqGraphPath
+        logseqGraphPath,
+        inboxServerUrl,
+        exportLookbackHours,
+        exportMaxPosts
       })
     ]);
   }
@@ -338,6 +361,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     } catch (error) {
       console.error('Error connecting to Logseq:', error);
       alert('连接 Logseq 失败，请确保：\n1. Logseq 已启动\n2. HTTP Server 已开启\n3. Token 配置正确\n\n' + error.message);
+    }
+  });
+
+  document.getElementById('resetExportCheckpoint')?.addEventListener('click', async () => {
+    if (!confirm('确定重置导出截止点？下次将按「回看时长」重新导出。')) return;
+    await chrome.storage.local.remove('lastExportCheckpoint');
+    const checkpointInput = document.getElementById('lastExportCheckpoint');
+    if (checkpointInput) checkpointInput.value = '';
+    alert('截止点已重置');
+  });
+
+  document.getElementById('testInboxServer')?.addEventListener('click', async () => {
+    const url = (document.getElementById('inboxServerUrl')?.value || 'http://127.0.0.1:3921').replace(/\/$/, '');
+    const btn = document.getElementById('testInboxServer');
+    btn.disabled = true;
+    btn.textContent = '测试中...';
+    try {
+      const response = await fetch(`${url}/health`);
+      const data = await response.json();
+      if (!response.ok || !data.ok) throw new Error('服务未就绪');
+      alert(`Inbox 服务正常\n写入目录：${data.root}/daily-inbox/`);
+    } catch (error) {
+      alert(`无法连接 Inbox 服务：${error.message}\n请先运行 node scripts/local-inbox-server.mjs`);
+    } finally {
+      btn.disabled = false;
+      btn.textContent = '测试 Inbox 连接';
     }
   });
 });
