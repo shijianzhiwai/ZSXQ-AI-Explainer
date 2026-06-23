@@ -83,194 +83,371 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
   <title>${escapeHtml(manifest.group || '知识星球')} — ${escapeHtml(date)} 日报</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      color-scheme: light dark;
-      --bg: #f0f0f0;
-      --card: #f7f7f7;
-      --text: #5c5c5c;
-      --text-strong: #454545;
-      --muted: #8a8a8a;
-      --heading: #6b7f96;
-      --link: #6b8cae;
-      --agent: #8b7aa8;
-      --agent-bg: rgba(0,0,0,.03);
-      --panel: rgba(0,0,0,.02);
-      --border: rgba(0,0,0,.07);
-      --source-badge-text: #9a9a9a;
-      --source-badge-bg: rgba(0,0,0,.03);
-      --source-badge-border: rgba(0,0,0,.06);
+      color-scheme: light;
+      --primary: #0075de;
+      --primary-active: #005bab;
+      --secondary: #213183;
+      --on-primary: #ffffff;
+      --canvas: #ffffff;
+      --canvas-soft: #f6f5f4;
+      --surface: #ffffff;
+      --ink: rgba(0, 0, 0, 0.95);
+      --ink-secondary: #31302e;
+      --ink-muted: #615d59;
+      --ink-faint: #a39e98;
+      --hairline: #e6e6e6;
+      --accent-sky: #62aef0;
+      --accent-purple: #d6b6f6;
+      --accent-pink: #ff64c8;
+      --accent-orange: #dd5b00;
+      --accent-teal: #2a9d99;
+      --accent-green: #1aae39;
+      --font-sans: 'Inter', -apple-system, system-ui, 'Segoe UI', Helvetica, Arial, sans-serif;
+      --radius-xs: 4px;
+      --radius-md: 8px;
+      --radius-lg: 12px;
+      --radius-xl: 16px;
+      --radius-full: 9999px;
+      --shadow-soft:
+        rgba(0, 0, 0, 0.01) 0 0.175px 1.041px,
+        rgba(0, 0, 0, 0.02) 0 0.8px 2.925px,
+        rgba(0, 0, 0, 0.027) 0 2.025px 7.847px,
+        rgba(0, 0, 0, 0.04) 0 4px 18px;
     }
-    @media (prefers-color-scheme: dark) {
-      :root {
-        --bg: #141414;
-        --card: #1a1a1a;
-        --text: #c4c4c4;
-        --text-strong: #dedede;
-        --muted: #949494;
-        --heading: #aeb9c8;
-        --link: #9bb5d0;
-        --agent: #c4a8d8;
-        --agent-bg: rgba(255,255,255,.05);
-        --panel: rgba(255,255,255,.04);
-        --border: rgba(255,255,255,.1);
-        --source-badge-text: #8a8a8a;
-        --source-badge-bg: rgba(255,255,255,.04);
-        --source-badge-border: rgba(255,255,255,.08);
-      }
-    }
+    *, *::before, *::after { box-sizing: border-box; }
     body {
-      font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 400;
+      line-height: 1.5;
       margin: 0;
-      background: var(--bg);
-      color: var(--text);
-      line-height: 1.65;
+      background: var(--canvas-soft);
+      color: var(--ink-secondary);
       -webkit-font-smoothing: antialiased;
+      font-feature-settings: 'lnum' 1, 'locl' 1;
     }
-    .wrap { max-width: 920px; margin: 0 auto; padding: 32px 20px 64px; }
-    header.page { margin-bottom: 28px; }
-    header.page h1 { margin: 0 0 8px; font-size: 1.75rem; color: var(--text-strong); font-weight: 600; }
-    header.page p { margin: 0; color: var(--muted); }
-    .legend { display: flex; flex-wrap: wrap; gap: 8px; margin: 12px 0 0; color: var(--muted); font-size: .85rem; }
+    .hero-band {
+      background: var(--secondary);
+      color: var(--on-primary);
+      padding: 32px 24px 40px;
+    }
+    .hero-inner {
+      max-width: 1200px;
+      margin: 0 auto;
+    }
+    .page-label {
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.33;
+      letter-spacing: 0.125px;
+      color: rgba(255, 255, 255, 0.72);
+      margin: 0 0 12px;
+    }
+    .hero-band h1 {
+      margin: 0 0 12px;
+      font-size: clamp(28px, 4.5vw, 40px);
+      font-weight: 700;
+      line-height: 1.1;
+      letter-spacing: -1px;
+      color: var(--on-primary);
+    }
+    .page-meta {
+      margin: 0;
+      font-size: 15px;
+      color: rgba(255, 255, 255, 0.78);
+    }
+    .wrap {
+      max-width: 1200px;
+      margin: 0 auto;
+      padding: 32px 24px 48px;
+    }
+    .legend {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 12px 20px;
+      margin: 0 0 32px;
+      padding: 20px 24px;
+      background: var(--surface);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-lg);
+      font-size: 14px;
+      color: var(--ink-muted);
+    }
+    .legend-item {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+    }
     .badge {
-      display: inline-block;
-      font-size: .68rem;
-      font-weight: 500;
-      line-height: 1.4;
-      padding: 2px 8px;
-      border-radius: 999px;
-      margin-right: 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      line-height: 1.33;
+      letter-spacing: 0.125px;
+      padding: 4px 8px;
+      border-radius: var(--radius-full);
+      margin-right: 8px;
       vertical-align: middle;
-      background: var(--agent-bg);
-      color: var(--agent);
-      border: 1px solid var(--border);
+      background: var(--surface);
+      color: var(--primary);
+      border: 1px solid var(--hairline);
     }
-    .agent-block .badge { margin-bottom: 6px; }
+    .badge-dot {
+      width: 7px;
+      height: 7px;
+      border-radius: var(--radius-full);
+      flex-shrink: 0;
+    }
+    .badge-dot-sky { background: var(--accent-sky); }
+    .badge-dot-teal { background: var(--accent-teal); }
+    .badge-dot-purple { background: var(--accent-purple); }
+    .badge-dot-green { background: var(--accent-green); }
+    .badge-dot-orange { background: var(--accent-orange); }
+    .badge-dot-pink { background: var(--accent-pink); }
+    .agent-block .badge { margin-bottom: 8px; }
     .overview.agent-block {
-      margin-top: 14px;
-      padding: 14px 16px;
-      background: var(--panel);
-      border-radius: 10px;
-      border-left: 3px solid var(--border);
-      color: var(--text);
+      margin-bottom: 32px;
+      padding: 24px;
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--hairline);
+      box-shadow: var(--shadow-soft);
+      color: var(--ink-secondary);
     }
     .block, .post {
-      background: var(--card);
-      border-radius: 12px;
-      padding: 20px 22px;
-      margin-bottom: 16px;
-      border: 1px solid var(--border);
-      box-shadow: none;
+      background: var(--surface);
+      border-radius: var(--radius-lg);
+      padding: 24px;
+      margin-bottom: 24px;
+      border: 1px solid var(--hairline);
     }
-    .post { position: relative; padding-right: 52px; }
-    h2 { margin-top: 0; color: var(--heading); font-size: 1.12rem; font-weight: 600; }
-    h3 { margin: 0 0 4px; font-size: 1rem; color: var(--text-strong); font-weight: 500; }
-    a { color: var(--link); }
+    .block { box-shadow: none; }
+    .post {
+      position: relative;
+      padding-right: 72px;
+      box-shadow: var(--shadow-soft);
+    }
+    .posts-section {
+      margin-top: 32px;
+    }
+    .posts-section > h2 {
+      margin: 0 0 24px;
+      font-size: 26px;
+      font-weight: 700;
+      line-height: 1.23;
+      letter-spacing: -0.625px;
+      color: var(--ink);
+    }
+    h2 {
+      margin: 0 0 16px;
+      font-size: 22px;
+      font-weight: 700;
+      line-height: 1.27;
+      letter-spacing: -0.25px;
+      color: var(--ink);
+    }
+    h3 {
+      margin: 0 0 4px;
+      font-size: 20px;
+      font-weight: 600;
+      line-height: 1.4;
+      letter-spacing: -0.125px;
+      color: var(--ink);
+    }
+    a {
+      color: var(--primary);
+      text-decoration: none;
+    }
+    a:hover {
+      color: var(--primary-active);
+      text-decoration: underline;
+    }
     .source-badge {
       position: absolute;
-      top: 12px;
-      right: 12px;
+      top: 20px;
+      right: 20px;
       z-index: 1;
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      min-width: 32px;
-      padding: 2px 7px;
-      font-size: .65rem;
-      font-weight: 400;
-      line-height: 1.2;
-      color: var(--source-badge-text);
+      min-width: 40px;
+      height: 32px;
+      padding: 4px 14px;
+      font-family: var(--font-sans);
+      font-size: 16px;
+      font-weight: 500;
+      line-height: 1.5;
+      color: var(--ink);
       text-decoration: none;
-      background: var(--source-badge-bg);
-      border: 1px solid var(--source-badge-border);
-      border-radius: 4px;
+      background: var(--surface);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-md);
     }
     .source-badge:hover {
-      color: var(--muted);
-      background: var(--panel);
-      border-color: var(--border);
+      color: var(--ink);
+      background: var(--canvas-soft);
+      text-decoration: none;
     }
-    time { color: var(--muted); font-size: .85rem; }
-    ul { padding-left: 1.2rem; color: var(--text); }
-    li { color: var(--text); }
-    .chart { margin: 12px 0 0; position: relative; }
-    .chart-agent { padding-top: 8px; border-top: 1px dashed var(--border); }
-    .chart-agent > .badge { position: absolute; top: 12px; right: 0; }
-    .chart img { max-width: 100%; border-radius: 8px; border: 1px solid var(--border); display: block; }
-    .chart figcaption { color: var(--muted); font-size: .85rem; margin-top: 8px; }
+    time {
+      color: var(--ink-faint);
+      font-size: 14px;
+    }
+    ul { padding-left: 0; color: var(--ink-secondary); }
+    li { color: var(--ink-secondary); }
+    .chart {
+      margin: 16px 0 0;
+      position: relative;
+    }
+    .chart-agent {
+      padding-top: 16px;
+      border-top: 1px solid var(--hairline);
+    }
+    .chart-agent > .badge {
+      position: absolute;
+      top: 16px;
+      right: 0;
+    }
+    .chart img {
+      max-width: 100%;
+      border-radius: var(--radius-lg);
+      border: 1px solid var(--hairline);
+      display: block;
+    }
+    .chart figcaption {
+      color: var(--ink-muted);
+      font-size: 14px;
+      margin-top: 12px;
+    }
     .chart-summary {
-      color: var(--text);
-      font-size: .9rem;
-      margin-top: 8px;
-      padding: 10px 12px;
-      background: var(--panel);
-      border-radius: 8px;
+      color: var(--ink-secondary);
+      font-size: 15px;
+      margin-top: 12px;
+      padding: 16px;
+      background: var(--canvas-soft);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--hairline);
     }
-    .rich-block { font-size: .95rem; margin: 10px 0 0; color: var(--text); }
+    .rich-block {
+      font-size: 16px;
+      margin: 16px 0 0;
+      color: var(--ink-secondary);
+    }
     .section-facts, .post-facts {
-      padding: 10px 12px;
-      background: var(--panel);
-      border-radius: 8px;
-      color: var(--text);
+      padding: 16px;
+      background: var(--canvas-soft);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--hairline);
+      color: var(--ink-secondary);
     }
     .section-analysis, .post-analysis {
-      padding: 10px 12px;
-      background: var(--agent-bg);
-      border-radius: 8px;
-      color: var(--text);
+      padding: 16px;
+      background: var(--surface);
+      border-radius: var(--radius-md);
+      border: 1px solid var(--hairline);
+      box-shadow: var(--shadow-soft);
+      color: var(--ink-secondary);
     }
     .section-takeaway, .post-takeaway {
-      padding: 8px 12px;
-      border-left: 3px solid var(--border);
-      margin-top: 8px;
-      font-size: .92rem;
-      color: var(--muted);
+      padding: 12px 16px;
+      border-left: 3px solid var(--primary);
+      margin-top: 12px;
+      font-size: 15px;
+      color: var(--ink-muted);
+      background: transparent;
     }
-    .section-bullets { margin-top: 12px; padding-left: 0; list-style: none; }
+    .section-bullets {
+      margin-top: 16px;
+      padding-left: 0;
+      list-style: none;
+    }
     .bullet-item {
       position: relative;
-      padding: 8px 44px 8px 1.1rem;
-      margin-bottom: 6px;
-      color: var(--text);
+      padding: 10px 52px 10px 16px;
+      margin-bottom: 8px;
+      color: var(--ink-secondary);
+      border-bottom: 1px solid var(--hairline);
     }
+    .bullet-item:last-child { border-bottom: none; }
     .bullet-item::before {
-      content: "•";
+      content: "·";
       position: absolute;
       left: 0;
-      color: var(--muted);
+      color: var(--ink-faint);
+      font-weight: 700;
     }
-    .bullet-item .source-badge { top: 6px; right: 0; }
+    .bullet-item .source-badge {
+      top: 8px;
+      right: 0;
+      height: 28px;
+      min-width: 36px;
+      padding: 4px 10px;
+      font-size: 14px;
+    }
     .bullet-text { display: block; }
-    .post-summary { font-size: .95rem; color: var(--text); }
-    strong { color: var(--text-strong); font-weight: 600; }
-    footer { margin-top: 32px; color: var(--muted); font-size: .8rem; text-align: center; }
-    footer .build-stamp { font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: .72rem; opacity: .75; }
+    .post-summary {
+      font-size: 16px;
+      color: var(--ink-secondary);
+    }
+    strong { color: var(--ink); font-weight: 600; }
+    footer {
+      margin-top: 0;
+      padding: 32px 24px;
+      background: var(--canvas-soft);
+      border-top: 1px solid var(--hairline);
+      color: var(--ink-secondary);
+      font-size: 14px;
+      text-align: center;
+    }
+    footer .build-stamp {
+      display: block;
+      margin-top: 8px;
+      font-size: 12px;
+      color: var(--ink-faint);
+    }
+    @media (max-width: 640px) {
+      .hero-band { padding: 24px 16px 32px; }
+      .wrap { padding: 24px 16px 32px; }
+      .block, .post { padding: 20px 16px; }
+      .post { padding-right: 16px; padding-top: 48px; }
+      .source-badge { top: 12px; right: 12px; }
+      .legend { flex-direction: column; gap: 10px; }
+    }
   </style>
 </head>
 <body>
-  <div class="wrap">
-    <header class="page">
+  <header class="hero-band">
+    <div class="hero-inner">
+      <p class="page-label">每日总结 · ${escapeHtml(manifest.group || '知识星球')}</p>
       <h1>${escapeHtml(summary.title || `${manifest.group || '知识星球'} 每日总结`)}</h1>
-      <p>${escapeHtml(date)} · ${manifest.post_count || 0} 帖 · ${manifest.image_count || 0} 图</p>
-      <div class="legend">
-        ${renderAgentBadge('Agent 今日要点')} 全天脉络
-        ${renderAgentBadge('Agent 信息汇总')} 事实与数据
-        ${renderAgentBadge('Agent 解析')} 背景与含义
-        ${renderAgentBadge('Agent 要点')} 精简收束
-        ${renderAgentBadge('Agent 识图')} 图表
-      </div>
-      ${summary.overview ? `<div class="overview agent-block">${renderAgentBadge('Agent 今日要点')}${markdownLite(summary.overview)}</div>` : ''}
-    </header>
+      <p class="page-meta">${escapeHtml(date)} · ${manifest.post_count || 0} 帖 · ${manifest.image_count || 0} 图</p>
+    </div>
+  </header>
+  <div class="wrap">
+    <div class="legend">
+      <span class="legend-item">${renderAgentBadge('Agent 今日要点')}全天脉络</span>
+      <span class="legend-item">${renderAgentBadge('Agent 信息汇总')}事实与数据</span>
+      <span class="legend-item">${renderAgentBadge('Agent 解析')}背景与含义</span>
+      <span class="legend-item">${renderAgentBadge('Agent 要点')}精简收束</span>
+      <span class="legend-item">${renderAgentBadge('Agent 识图')}图表</span>
+    </div>
+    ${summary.overview ? `<div class="overview agent-block">${renderAgentBadge('Agent 今日要点')}${markdownLite(summary.overview)}</div>` : ''}
     ${sections}
-    <section class="block">
+    <section class="posts-section">
       <h2>帖子详情</h2>
       ${postBlocks}
     </section>
-    <footer>
-      由 ZSXQ-AI-Explainer 每日流水线生成<br>
-      <span class="build-stamp">layout=cursor-dark · built=${escapeHtml(builtAt)}</span>
-    </footer>
   </div>
+  <footer>
+    由 ZSXQ-AI-Explainer 每日流水线生成
+    <span class="build-stamp">layout=notion-paper · built=${escapeHtml(builtAt)}</span>
+  </footer>
 </body>
 </html>`;
 }
@@ -314,8 +491,22 @@ function markdownLite(text) {
   return s.replace(/\n/g, '<br>');
 }
 
+const BADGE_DOTS = {
+  'Agent 今日要点': 'sky',
+  'Agent 信息汇总': 'teal',
+  'Agent 解析': 'purple',
+  'Agent 要点': 'green',
+  'Agent 识图': 'orange',
+  'Agent 图表解读': 'orange',
+  'Agent 图注': 'pink',
+  'Agent 章节': 'sky',
+  'Agent 帖文解读': 'sky'
+};
+
 function renderAgentBadge(label = 'Agent') {
-  return `<span class="badge badge-agent" title="由 Cursor Agent 生成">${escapeHtml(label)}</span>`;
+  const dot = BADGE_DOTS[label];
+  const dotHtml = dot ? `<span class="badge-dot badge-dot-${dot}" aria-hidden="true"></span>` : '';
+  return `<span class="badge badge-pill" title="由 Cursor Agent 生成">${dotHtml}${escapeHtml(label)}</span>`;
 }
 
 function manifestUrlMaps(manifest) {
@@ -468,7 +659,7 @@ async function main() {
   const reportPath = path.join(REPO_ROOT, 'daily-inbox', args.date, 'report.html');
   console.log(`\n主报告（推荐，图片路径已验证）：\n  ${primaryHtml}`);
   console.log(`副本：${reportPath}`);
-  console.log('页脚应显示 layout=cursor-dark · built=...');
+  console.log('页脚应显示 layout=notion-paper · built=...');
 
   if (args.open && process.platform === 'darwin') {
     spawn('open', [primaryHtml], { stdio: 'ignore', detached: true }).unref();
