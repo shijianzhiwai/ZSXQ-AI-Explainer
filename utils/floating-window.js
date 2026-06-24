@@ -659,6 +659,142 @@ class FloatingWindow {
     }
   }
 
+  async autoScrollCaptureTopPosts(maxPosts, onProgress) {
+    const wasCapturing = this.isCapturing;
+    this.isCapturing = true;
+    this.isAutoScrolling = true;
+    try {
+      return await ZSXQAutoScrollCapture.captureTopPosts(this, { maxPosts, onProgress });
+    } finally {
+      this.isAutoScrolling = false;
+      this.isCapturing = wasCapturing;
+    }
+  }
+
+  async ensureDigestsFeed() {
+    const active = document.querySelector('.menu-item.active, .tab-item.active, .active');
+    if (active?.textContent?.trim() === '精华') return true;
+
+    const candidates = [...document.querySelectorAll('a, button, li, div, span')];
+    const digestsTab = candidates.find((el) => {
+      if (el.textContent?.trim() !== '精华') return false;
+      if (el.closest('app-topic, .talk-content-container')) return false;
+      return true;
+    });
+
+    if (!digestsTab) return false;
+    digestsTab.click();
+    await new Promise((resolve) => setTimeout(resolve, 1500));
+    return true;
+  }
+
+  resetCapturedContent() {
+    this.contentArray = [];
+    this.contentHashes.clear();
+    this.updateNumber(0);
+  }
+
+  async handleDebugFeedExport(options = {}) {
+    const silent = options.silent === true;
+    const slug = String(options.slug || options.inbox_slug || '').trim();
+    const count = Number(options.count) || 10;
+    const navigateDigests = options.navigate_digests !== false;
+
+    if (!slug) {
+      return { ok: false, error: 'slug is required' };
+    }
+
+    const dailyBtn = this.floatingWindow?.querySelector('#daily-btn');
+    if (dailyBtn && !silent) {
+      dailyBtn.disabled = true;
+      dailyBtn.textContent = '调试导出中...';
+    }
+
+    try {
+      if (navigateDigests) {
+        const switched = await this.ensureDigestsFeed();
+        if (!switched) {
+          console.warn('[debug export] 未找到「精华」标签，将导出当前页面可见帖子');
+        }
+      }
+
+      this.resetCapturedContent();
+
+      const scrollResult = await this.autoScrollCaptureTopPosts(
+        count,
+        ({ captured, step, target }) => {
+          if (dailyBtn && !silent) {
+            dailyBtn.textContent = `调试抓取 ${captured}/${target}…`;
+          }
+          if (step % 5 === 0) {
+            console.log(`[debug export] 滚动第 ${step} 步，${captured}/${target} 帖`);
+          }
+        }
+      );
+
+      const topItems = ZSXQDailyExport.takeTopPosts(this.contentArray, count);
+      if (topItems.length === 0) {
+        const error = '当前页面未采集到帖子，请确认已打开知识星球并切换到「精华」';
+        if (!silent) alert(error);
+        return { ok: false, error, scrollResult };
+      }
+
+      if (dailyBtn && !silent) dailyBtn.textContent = '调试导出中...';
+
+      const enriched = await ZSXQDailyExport.enrichTopPosts(topItems, count);
+      const group = enriched[0]?.group || ZSXQContentExtractor.getGroupName();
+      const exportTime = new Date().toISOString();
+      const manifest = ZSXQDailyExport.buildManifest(enriched, {
+        date: slug,
+        inboxSlug: slug,
+        group,
+        exportTime,
+        exportMode: 'debug_digests',
+        feed: 'digests',
+        exportWindow: {
+          mode: 'debug_top_n',
+          count,
+          feed: 'digests'
+        },
+        maxPosts: count,
+        checkpointAfter: null
+      });
+      const images = ZSXQDailyExport.collectImagePayloads(enriched);
+
+      const response = await chrome.runtime.sendMessage({
+        action: 'saveDailyBundle',
+        payload: { date: slug, manifest, images, mode: 'auto' }
+      });
+
+      if (!response?.ok) {
+        throw new Error(response?.error || '导出失败');
+      }
+
+      const articleLinks = enriched.filter((post) => post.post_kind === 'article_link').length;
+      const msg = `调试导出完成：${manifest.post_count} 帖（${articleLinks} 篇待读长文）→ daily-inbox/${slug}/`;
+      if (!silent) alert(msg);
+      console.log('[debug export]', response.result, manifest);
+
+      return {
+        ok: true,
+        slug,
+        manifest,
+        result: response.result,
+        scrollResult,
+        article_link_count: articleLinks
+      };
+    } catch (error) {
+      console.error('[debug export] failed:', error);
+      if (!silent) alert(`调试导出失败：${error.message}`);
+      return { ok: false, error: error.message };
+    } finally {
+      if (dailyBtn && !silent) {
+        dailyBtn.disabled = false;
+        dailyBtn.textContent = '导出增量';
+      }
+    }
+  }
+
   /** @deprecated */
   async autoScrollCaptureToday(dateStr, onProgress) {
     const exportWindow = await ZSXQDailyExport.getExportWindow();
@@ -1250,7 +1386,7 @@ class FloatingWindow {
 let floatingWindow = null;
 
 function initZsxqExtractorApi() {
-  window.zsxqExtractor = {
+  const api = {
     extractPost: (index) => ZSXQContentExtractor.extractPostByIndex(index),
     extractPostAt: (x, y) => ZSXQContentExtractor.extractPostAt(x, y),
     extractAllVisible: () => ZSXQContentExtractor.extractAllVisible(),
@@ -1272,10 +1408,13 @@ function initZsxqExtractorApi() {
     exportJson: () => floatingWindow?.exportContent(),
     exportToday: () => floatingWindow?.handleDailyExport(),
     exportIncremental: (options) => floatingWindow?.handleDailyExport(options),
+    exportDebugFeed: (options) => floatingWindow?.handleDebugFeedExport(options),
     autoScrollWindow: (windowStart) => floatingWindow?.autoScrollCaptureWindow(windowStart),
     autoScrollToday: () => floatingWindow?.handleDailyExport(),
     copyJson: () => floatingWindow?.handleCopy()
   };
+  window.zsxqExtractor = api;
+  window.ZSXQExtractor = api;
 }
 
 // 等待页面加载完成后初始化

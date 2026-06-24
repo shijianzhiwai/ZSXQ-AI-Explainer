@@ -12,6 +12,8 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { attachTopicUrls } from './lib/topic-url.mjs';
+import { collectReadingListFromManifest, isArticleLinkPost } from './lib/article-link.mjs';
+import { parseInboxFolderArg } from './lib/inbox-slug.mjs';
 import { DEFAULT_PORT, getLanAddresses, summaryReportUrl } from './local-inbox-server.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
@@ -25,15 +27,15 @@ function todayDateString(date = new Date()) {
 }
 
 function parseArgs(argv) {
-  const args = { date: todayDateString(), summary: '', out: '', open: false };
+  const { folder } = parseInboxFolderArg(argv);
+  const args = { date: folder, summary: '', out: '', open: false };
   for (let i = 2; i < argv.length; i++) {
-    if (argv[i] === '--date') args.date = argv[++i];
     if (argv[i] === '--summary') args.summary = argv[++i];
     if (argv[i] === '--out') args.out = argv[++i];
     if (argv[i] === '--open') args.open = true;
   }
   if (!args.summary) {
-    args.summary = path.join(REPO_ROOT, 'daily-inbox', args.date, 'summary.json');
+    args.summary = path.join(REPO_ROOT, 'daily-inbox', folder, 'summary.json');
   }
   return args;
 }
@@ -65,17 +67,27 @@ function resolveOutputTargets(date, outOverride = '') {
 function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
   const pageTitle = `${date} 每日总结`;
   const footerLine = renderFooterLine(manifest, summary, builtAt);
+  const readingList = collectReadingListFromManifest(manifest);
+  const readingIds = new Set(readingList.map((item) => String(item.id)));
   const sections = (summary.sections || []).map((section) => renderSectionBlock(section)).join('\n');
-  const postBlocks = summary.posts?.length
-    ? renderPostBlocks(summary.posts, inboxRel, urlMaps)
+  const summarizableSummaryPosts = (summary.posts || []).filter(
+    (post) => !shouldSkipSummaryPost(post, readingIds)
+  );
+  const summarizableManifestPosts = (manifest.posts || []).filter(
+    (post) => !isArticleLinkPost(post)
+  );
+  const postBlocks = summarizableSummaryPosts.length
+    ? renderPostBlocks(summarizableSummaryPosts, inboxRel, urlMaps)
     : renderPostBlocks(
-      (manifest.posts || []).map((p) => ({
+      summarizableManifestPosts.map((p) => ({
         ...p,
         summary: p.text
       })),
       inboxRel,
       urlMaps
     );
+  const readingListBlock = renderReadingListSection(readingList, urlMaps);
+  const readingLabel = readingList.length ? ` · ${readingList.length} 篇待读` : '';
 
   return `<!DOCTYPE html>
 <html lang="zh-CN">
@@ -416,6 +428,56 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
       margin: 0;
       line-height: 1.43;
     }
+    .reading-list-block {
+      background: var(--surface);
+      border: 1px solid var(--hairline);
+      border-radius: var(--radius-lg);
+      box-shadow: var(--shadow-soft);
+      padding: 24px;
+      margin-bottom: 24px;
+    }
+    .reading-list-block h2 {
+      margin: 0 0 8px;
+      font-size: 20px;
+      font-weight: 700;
+      color: var(--ink);
+    }
+    .reading-note {
+      margin: 0 0 20px;
+      color: var(--ink-muted);
+      font-size: 14px;
+    }
+    .reading-item {
+      position: relative;
+      padding: 16px 0;
+      border-top: 1px solid var(--hairline);
+    }
+    .reading-item:first-of-type { border-top: 0; padding-top: 0; }
+    .reading-item time {
+      display: block;
+      font-size: 12px;
+      color: var(--ink-faint);
+      margin-bottom: 8px;
+    }
+    .reading-links {
+      margin: 0;
+      padding-left: 1.1em;
+      color: var(--ink-secondary);
+    }
+    .reading-links li { margin: 6px 0; }
+    .reading-links a {
+      color: var(--primary);
+      text-decoration: none;
+      font-weight: 500;
+    }
+    .reading-links a:hover { text-decoration: underline; }
+    .reading-links .link-kind {
+      display: inline-block;
+      margin-left: 8px;
+      font-size: 12px;
+      color: var(--ink-faint);
+      font-weight: 400;
+    }
     @media (max-width: 640px) {
       .hero-band { padding: 24px 16px 32px; }
       .wrap { padding: 24px 16px 32px; }
@@ -431,7 +493,7 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
     <div class="hero-inner">
       <p class="page-label">每日总结</p>
       <h1>${escapeHtml(pageTitle)}</h1>
-      <p class="page-meta">${escapeHtml(date)} · ${manifest.post_count || 0} 帖 · ${manifest.image_count || 0} 图</p>
+      <p class="page-meta">${escapeHtml(date)} · ${manifest.post_count || 0} 帖${readingLabel} · ${manifest.image_count || 0} 图</p>
     </div>
   </header>
   <div class="wrap">
@@ -443,6 +505,7 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
       <span class="legend-item">${renderAgentBadge('Agent 识图')}图表</span>
     </div>
     ${summary.overview ? `<div class="overview agent-block">${renderAgentBadge('Agent 今日要点')}${markdownLite(summary.overview)}</div>` : ''}
+    ${readingListBlock}
     ${sections}
     <section class="posts-section">
       <h2>帖子详情</h2>
@@ -454,6 +517,49 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
   </footer>
 </body>
 </html>`;
+}
+
+function shouldSkipSummaryPost(post, readingIds) {
+  if (post?.post_kind === 'article_link') return true;
+  if (readingIds?.has(String(post.id))) return true;
+  return false;
+}
+
+function linkKindLabel(url) {
+  if (/articles\.zsxq\.com/i.test(url)) return '星球长文';
+  return '原文地址';
+}
+
+function renderReadingListSection(readingList, urlMaps) {
+  if (!readingList?.length) return '';
+
+  const items = readingList.map((item) => {
+    const topicUrl = resolveTopicUrlForPost(item, urlMaps);
+    const sourceBadge = topicUrl ? renderSourceBadge(topicUrl) : '';
+    const links = (item.article_links?.length
+      ? item.article_links
+      : [{ title: item.article_title, url: item.article_url }])
+      .filter((link) => link?.url);
+
+    const linksHtml = links.map((link) => {
+      const kind = linkKindLabel(link.url);
+      return `<li><a href="${escapeHtml(link.url)}" target="_blank" rel="noopener">${escapeHtml(link.title || link.url)}</a><span class="link-kind">${escapeHtml(kind)}</span></li>`;
+    }).join('');
+
+    return `
+      <article class="reading-item">
+        ${sourceBadge}
+        <time>${escapeHtml(item.published_at || '')}</time>
+        <ul class="reading-links">${linksHtml}</ul>
+      </article>`;
+  }).join('\n');
+
+  return `
+    <section class="reading-list-block">
+      <h2>待读长文</h2>
+      <p class="reading-note">以下帖子仅列出完整文章链接，不做内容总结，请自行阅读。</p>
+      ${items}
+    </section>`;
 }
 
 function escapeHtml(value) {
@@ -668,10 +774,18 @@ async function main() {
     console.warn('  Re-run summary agent first: node scripts/run-summary-agent.mjs --date', args.date);
   }
 
-  const postCount = summary.posts?.length || 0;
-  const richPosts = (summary.posts || []).filter((p) => p.facts || p.analysis || p.takeaway).length;
+  const readingList = collectReadingListFromManifest(manifest);
+  const readingIds = new Set(readingList.map((item) => String(item.id)));
+  const summarizableSummaryPosts = (summary.posts || []).filter(
+    (post) => !shouldSkipSummaryPost(post, readingIds)
+  );
+  const summarizableManifestPosts = (manifest.posts || []).filter(
+    (post) => !isArticleLinkPost(post)
+  );
+  const postCount = summarizableSummaryPosts.length || summarizableManifestPosts.length;
+  const richPosts = summarizableSummaryPosts.filter((p) => p.facts || p.analysis || p.takeaway).length;
   console.log(`Input  manifest: ${manifestPath}`);
-  console.log(`Input  summary:  ${summaryPath} (${postCount} posts, ${richPosts} with facts/analysis)`);
+  console.log(`Input  summary:  ${summaryPath} (${postCount} summarized posts, ${readingList.length} reading-list, ${richPosts} with facts/analysis)`);
 
   const urlMaps = manifestUrlMaps(manifest);
   const builtAt = new Date().toISOString();

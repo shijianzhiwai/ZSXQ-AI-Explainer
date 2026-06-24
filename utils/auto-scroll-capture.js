@@ -259,6 +259,80 @@ const ZSXQAutoScrollCapture = {
     };
   },
 
+  async captureTopPosts(floatingWindow, { maxPosts, onProgress } = {}) {
+    const postLimit = Number(maxPosts) || 10;
+    const root = this.getScrollRoot();
+    const maxScrolls = 40;
+    const maxMs = 120000;
+    const startedAt = Date.now();
+
+    let scrollStuckRounds = 0;
+    let lastScrollTop = this.getScrollTop(root);
+
+    this.scrollToTop(root);
+    await this.delay(700);
+
+    for (let step = 0; step < maxScrolls; step += 1) {
+      const elements = this.getOrderedPostElements();
+      let newCount = 0;
+
+      for (const content of elements) {
+        if (floatingWindow.contentArray.length >= postLimit) break;
+
+        const record = ZSXQContentExtractor.extractPostRecord(content);
+        const hash = ZSXQContentExtractor.hashRecord(record);
+        if (floatingWindow.contentHashes.has(hash)) continue;
+
+        floatingWindow.contentHashes.add(hash);
+        floatingWindow.contentArray.push(floatingWindow.extractContentInfo(content, hash, record));
+        newCount += 1;
+      }
+
+      if (newCount > 0) {
+        floatingWindow.updateNumber(floatingWindow.contentHashes.size);
+      }
+
+      const captured = floatingWindow.contentArray.length;
+      onProgress?.({ step: step + 1, captured, newCount, target: postLimit });
+
+      if (captured >= postLimit) {
+        console.log(`[debug export] 已采集 ${captured}/${postLimit} 帖，停止滚动`);
+        break;
+      }
+
+      if (Date.now() - startedAt >= maxMs) {
+        console.log(`[debug export] 超时，已采集 ${captured}/${postLimit} 帖`);
+        break;
+      }
+
+      const beforeTop = lastScrollTop;
+      const beforeBottomKey = this.getBottomPostKey();
+      this.scrollStep(root);
+      await this.delay(800);
+      const afterTop = this.getScrollTop(root);
+      const afterBottomKey = this.getBottomPostKey();
+      lastScrollTop = afterTop;
+
+      const scrollMoved = Math.abs(afterTop - beforeTop) >= 8;
+      const contentMoved = beforeBottomKey && afterBottomKey && beforeBottomKey !== afterBottomKey;
+      if (!scrollMoved && !contentMoved) {
+        scrollStuckRounds += 1;
+        if (scrollStuckRounds >= 3) {
+          console.log(`[debug export] 滚动到底，已采集 ${captured}/${postLimit} 帖`);
+          break;
+        }
+      } else {
+        scrollStuckRounds = 0;
+      }
+    }
+
+    return {
+      captured: floatingWindow.contentArray.length,
+      totalCaptured: floatingWindow.contentArray.length,
+      maxPosts: postLimit
+    };
+  },
+
   /** @deprecated */
   async captureToday(floatingWindow, options = {}) {
     const dateStr = options.dateStr || ZSXQDailyExport.todayDateString();

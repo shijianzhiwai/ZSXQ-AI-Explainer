@@ -123,6 +123,15 @@ const ZSXQTopicImageCache = {
     const plainText = this.normalizeTopicText(topic.talk?.text || topic.text || topic.show_title);
     const groupId = topic.group?.group_id || topic.group_id || '';
     const groupIdStr = groupId != null ? String(groupId) : '';
+    const articleLinks = typeof ZSXQArticleLink !== 'undefined'
+      ? ZSXQArticleLink.mergeArticleLinks(
+        ZSXQArticleLink.articleLinksFromApiTopic(topic),
+        []
+      )
+      : [];
+    const articleFields = typeof ZSXQArticleLink !== 'undefined'
+      ? ZSXQArticleLink.buildArticleLinkFields(articleLinks)
+      : { article_links: articleLinks };
     const meta = {
       topic_id: topicId,
       group_id: groupIdStr,
@@ -130,7 +139,12 @@ const ZSXQTopicImageCache = {
       author: topic.talk?.owner?.name || topic.owner?.name || '',
       published_at: topic.create_time || topic.talk?.create_time || '',
       text: plainText,
-      group: topic.group?.name || ''
+      group: topic.group?.name || '',
+      article_links: articleFields.article_links || [],
+      post_kind: articleFields.post_kind || 'talk',
+      article_url: articleFields.article_url || '',
+      article_title: articleFields.article_title || '',
+      include_in_summary: articleFields.include_in_summary !== false
     };
 
     if (topicId) {

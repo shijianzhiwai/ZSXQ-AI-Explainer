@@ -139,6 +139,12 @@ const ZSXQDailyExport = {
     return this.sortByPublishedDesc(posts).slice(0, limit);
   },
 
+  takeTopPosts(contents, maxPosts = this.DEFAULT_MAX_POSTS) {
+    const limit = Number(maxPosts) || this.DEFAULT_MAX_POSTS;
+    if (!limit || limit <= 0) return [...(contents || [])];
+    return (contents || []).slice(0, limit);
+  },
+
   maxPublishedAt(posts) {
     return (posts || []).reduce((max, post) => {
       const parsed = this.parsePublishedDateLoose(post.published_at);
@@ -170,11 +176,14 @@ const ZSXQDailyExport = {
     return `images/${this.sanitizeFileId(postId)}-${index}.jpg`;
   },
 
-  buildManifest(enrichedPosts, { date, group, exportTime, exportWindow, checkpointAfter, maxPosts }) {
+  buildManifest(enrichedPosts, { date, group, exportTime, exportWindow, checkpointAfter, maxPosts, exportMode, inboxSlug, feed }) {
     const posts = [];
     let imageCount = 0;
 
     for (const post of enrichedPosts) {
+      const postKind = post.post_kind || 'talk';
+      const postIncludeInSummary = postKind !== 'article_link' && post.include_in_summary !== false;
+
       const images = (post.images || []).map((img, idx) => {
         const index = img.index || idx + 1;
         const file = this.imageFileName(post.id, index);
@@ -190,7 +199,7 @@ const ZSXQDailyExport = {
         chart_summary: img.chart_summary || '',
         needs_vision: img.needs_vision ?? null,
         vision_task: img.vision_task || null,
-        include_in_summary: img.include_in_summary !== false,
+        include_in_summary: postIncludeInSummary && img.include_in_summary !== false,
           source: img.source || 'unknown'
         };
       });
@@ -204,14 +213,24 @@ const ZSXQDailyExport = {
         published_at: post.published_at || '',
         tags: post.tags || [],
         text: post.text || '',
+        post_kind: postKind,
+        article_links: post.article_links || [],
+        article_url: post.article_url || '',
+        article_title: post.article_title || '',
+        include_in_summary: postIncludeInSummary,
         images
       });
     }
+
+    const readingListCount = posts.filter((post) => post.post_kind === 'article_link').length;
 
     return {
       version: 1,
       kind: 'zsxq-daily-manifest',
       date,
+      inbox_slug: inboxSlug || date,
+      export_mode: exportMode || exportWindow?.mode || 'lookback',
+      feed: feed || null,
       group: group || '',
       group_id: enrichedPosts[0]?.group_id || '',
       exported_at: exportTime || new Date().toISOString(),
@@ -225,9 +244,11 @@ const ZSXQDailyExport = {
       max_posts: maxPosts ?? this.DEFAULT_MAX_POSTS,
       post_count: posts.length,
       image_count: imageCount,
+      reading_list_count: readingListCount,
       posts,
       llm_hints: {
         input_tokens: 'Use posts[].text; images: ocr_text (text) or chart_summary (chart). Skip include_in_summary=false.',
+        article_links: 'post_kind=article_link → reading list only; do not summarize preview text',
         vision: 'Run enrich-manifest-images.mjs (OCR), then node scripts/build-daily-pipeline.mjs',
         output: 'Write summary sections as markdown; image refs as ![caption](relative-path).'
       }
@@ -271,6 +292,44 @@ const ZSXQDailyExport = {
         topic_id: live?.topic_id || item.topic_id || '',
         topic_url: live?.topic_url || item.topic_url || '',
         group_id: live?.group_id || item.group_id || '',
+        post_kind: live?.post_kind || item.post_kind || 'talk',
+        article_links: live?.article_links?.length ? live.article_links : (item.article_links || []),
+        article_url: live?.article_url || item.article_url || '',
+        article_title: live?.article_title || item.article_title || '',
+        include_in_summary: live?.include_in_summary ?? item.include_in_summary ?? true,
+        images: resolvedImages
+      });
+    }
+
+    return enriched;
+  },
+
+  async enrichTopPosts(rawContents, maxPosts = this.DEFAULT_MAX_POSTS) {
+    const selected = this.takeTopPosts(rawContents, maxPosts);
+    const enriched = [];
+
+    for (const item of selected) {
+      const normalizedText = (item.text || '').replace(/\s+/g, ' ').trim();
+      const liveContent = [...document.querySelectorAll('.talk-content-container .content')].find(
+        (el) => el.textContent.replace(/\s+/g, ' ').trim() === normalizedText
+      );
+      const live = liveContent ? ZSXQContentExtractor.extractPostRecord(liveContent) : null;
+      const liveScope = liveContent ? ZSXQContentExtractor.getPostScope(liveContent) : null;
+      const images = live?.images?.length ? live.images : item.images;
+      const resolvedImages = await ZSXQContentExtractor.resolveImages(images, liveScope);
+      enriched.push({
+        ...item,
+        author: live?.author || item.author,
+        published_at: live?.published_at || item.published_at,
+        tags: live?.tags || item.tags,
+        topic_id: live?.topic_id || item.topic_id || '',
+        topic_url: live?.topic_url || item.topic_url || '',
+        group_id: live?.group_id || item.group_id || '',
+        post_kind: live?.post_kind || item.post_kind || 'talk',
+        article_links: live?.article_links?.length ? live.article_links : (item.article_links || []),
+        article_url: live?.article_url || item.article_url || '',
+        article_title: live?.article_title || item.article_title || '',
+        include_in_summary: live?.include_in_summary ?? item.include_in_summary ?? true,
         images: resolvedImages
       });
     }

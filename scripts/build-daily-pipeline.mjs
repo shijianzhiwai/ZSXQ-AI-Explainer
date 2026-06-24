@@ -9,19 +9,13 @@
  */
 import fs from 'node:fs/promises';
 import path from 'node:path';
-import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { REPO_ROOT } from './lib/cursor-agent.mjs';
-import { collectVisionTasks, loadManifest, resolveInboxPaths } from './lib/manifest-vision.mjs';
+import { resolveInboxPaths } from './lib/manifest-vision.mjs';
+import { parseInboxFolderArg, todayDateString } from './lib/inbox-slug.mjs';
+import { runDailyPipeline } from './lib/run-daily-pipeline.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
-
-function todayDateString(date = new Date()) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
 
 async function findLatestInboxDate() {
   const root = path.join(REPO_ROOT, 'daily-inbox');
@@ -66,73 +60,22 @@ function parseArgs(argv) {
   return args;
 }
 
-function runNode(scriptName, scriptArgs = []) {
-  const scriptPath = path.join(__dirname, scriptName);
-  return new Promise((resolve, reject) => {
-    console.log(`\n→ node scripts/${scriptName} ${scriptArgs.join(' ')}`.trim());
-    const child = spawn(process.execPath, [scriptPath, ...scriptArgs], {
-      cwd: REPO_ROOT,
-      stdio: 'inherit'
-    });
-    child.on('error', reject);
-    child.on('close', (code) => {
-      if (code !== 0) reject(new Error(`scripts/${scriptName} failed (${code})`));
-      else resolve();
-    });
-  });
-}
-
 async function main() {
+  const parsed = parseInboxFolderArg(process.argv, { defaultFolder: '' });
   const args = parseArgs(process.argv);
-  const date = args.date || await findLatestInboxDate();
-  const { manifestPath } = resolveInboxPaths(REPO_ROOT, date);
+  const folder = parsed.folder || args.date || await findLatestInboxDate();
 
-  try {
-    await fs.access(manifestPath);
-  } catch {
-    throw new Error(`Missing ${manifestPath} — export from extension first`);
-  }
+  const result = await runDailyPipeline(folder, {
+    skipOcr: args.skipOcr,
+    skipVision: args.skipVision,
+    skipSummary: args.skipSummary,
+    skipHtml: args.skipHtml,
+    reclassifyOnly: args.reclassifyOnly
+  });
 
-  console.log(`Daily pipeline for ${date}`);
-
-  if (!args.skipOcr) {
-    const ocrArgs = ['--date', date];
-    if (args.reclassifyOnly) ocrArgs.push('--reclassify-only');
-    await runNode('enrich-manifest-images.mjs', ocrArgs);
-  } else {
-    console.log('Skip OCR');
-  }
-
-  if (!args.skipVision) {
-    const manifest = await loadManifest(manifestPath);
-    const pending = collectVisionTasks(manifest).length;
-    if (pending > 0) {
-      await runNode('run-vision-agent.mjs', ['--date', date]);
-    } else {
-      console.log('Skip vision — no needs_vision images');
-    }
-  } else {
-    console.log('Skip vision');
-  }
-
-  if (!args.skipSummary) {
-    await runNode('run-summary-agent.mjs', ['--date', date]);
-  } else {
-    console.log('Skip summary');
-  }
-
-  if (!args.skipHtml) {
-    await runNode('build-daily-summary.mjs', ['--date', date]);
-  } else {
-    console.log('Skip HTML');
-  }
-
-  const htmlPath = path.join(REPO_ROOT, 'summaries', `${date}.html`);
-  const reportPath = path.join(REPO_ROOT, 'daily-inbox', date, 'report.html');
-  const { summaryReportUrl, DEFAULT_PORT } = await import('./local-inbox-server.mjs');
-  console.log(`\nDone → ${summaryReportUrl(date, DEFAULT_PORT)}`);
-  console.log(`     → ${htmlPath}`);
-  console.log(`     → ${reportPath}`);
+  console.log(`\nDone → ${result.reportUrl}`);
+  console.log(`     → ${result.htmlPath}`);
+  console.log(`     → ${result.reportPath}`);
 }
 
 main().catch((error) => {

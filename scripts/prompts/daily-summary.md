@@ -35,6 +35,17 @@
 ## 输入
 
 - `daily-inbox/{DATE}/summary-input.json`（已去除 base64）
+- `reading_list[]`：**待读长文**（仅链接，见下）——**不要**写入 `sections` / `posts` 总结
+
+## 待读长文（article_link）
+
+输入中的 `reading_list[]` 来自 `post_kind=article_link` 帖子（上方预览 + 下方 `link-of-topic` 全文链接）。
+
+**硬性要求**：
+
+- **禁止**总结 `reading_list` 中帖子的 `text` 预览
+- **禁止**把待读长文写进 `sections` 或 `posts[]`
+- HTML 会从 manifest 自动渲染「待读长文」区块；agent **无需**输出 reading_list
 
 ## 输出
 
@@ -96,5 +107,6 @@
 - `image_kind=chart` 且有 `chart_summary` → 放入 `posts[].images`（HTML 会嵌图）；文字部分仍须自然融入 `facts`
 - `image_kind=text` 且有 `image_content` → 写入 `facts` 时与正文合并，**不要**放入 `images` 数组
 - `photo` / `include_in_summary=false` → 跳过
+- `reading_list[]` / `post_kind=article_link` → **完全不总结**（见上）
 
 完成后回复 `SUMMARY_DONE`。

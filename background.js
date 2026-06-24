@@ -96,6 +96,10 @@ async function ensureInboxWebSocket() {
       if (message.type === 'command' && message.action === 'refresh_and_export') {
         handleRefreshAndExportCommand(message);
       }
+
+      if (message.type === 'command' && message.action === 'debug_export_feed') {
+        handleDebugExportFeedCommand(message);
+      }
     };
 
     socket.onclose = () => {
@@ -117,6 +121,27 @@ async function handleRefreshAndExportCommand(message) {
   const { id, payload = {} } = message;
   try {
     const data = await runRefreshAndExport(payload);
+    sendInboxWs({
+      type: 'command_result',
+      id,
+      ok: data?.ok !== false,
+      data,
+      error: data?.ok === false ? data.error : undefined
+    });
+  } catch (error) {
+    sendInboxWs({
+      type: 'command_result',
+      id,
+      ok: false,
+      error: error.message
+    });
+  }
+}
+
+async function handleDebugExportFeedCommand(message) {
+  const { id, payload = {} } = message;
+  try {
+    const data = await runDebugFeedExport(payload);
     sendInboxWs({
       type: 'command_result',
       id,
@@ -191,6 +216,38 @@ async function runRefreshAndExport({ reload = true, tabUrl } = {}) {
   const response = await chrome.tabs.sendMessage(tab.id, {
     action: 'runDailyExport',
     silent: true
+  });
+
+  if (!response) {
+    throw new Error('content script did not respond');
+  }
+  return response;
+}
+
+async function runDebugFeedExport({
+  slug,
+  count = 10,
+  reload = false,
+  navigate_digests = true,
+  tabUrl
+} = {}) {
+  const targetUrl = tabUrl || DEFAULT_GROUP_URL;
+  let tab = await findGroupTab(targetUrl);
+
+  if (!tab) {
+    tab = await chrome.tabs.create({ url: targetUrl, active: false });
+    await waitForTabLoad(tab.id);
+  } else if (reload) {
+    await chrome.tabs.reload(tab.id);
+    await waitForTabLoad(tab.id);
+  }
+
+  const response = await chrome.tabs.sendMessage(tab.id, {
+    action: 'runDebugFeedExport',
+    silent: true,
+    slug,
+    count,
+    navigate_digests
   });
 
   if (!response) {

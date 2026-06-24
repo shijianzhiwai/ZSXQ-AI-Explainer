@@ -38,7 +38,7 @@ node scripts/build-daily-pipeline.mjs
 ```bash
 # 1. 启动 Inbox 桥接（推荐，同时代理 HTML 日报 + WebSocket）
 node scripts/local-inbox-server.mjs
-# 默认每天 13:00 自动触发增量导出（等同 trigger-export.mjs）
+# 默认每天 13:00 自动跑完整链路（增量导出 → OCR → 总结 → HTML）
 # 关闭定时：node scripts/local-inbox-server.mjs --no-schedule
 # 改时间：  node scripts/local-inbox-server.mjs --schedule 09:30
 # 浏览器打开 http://127.0.0.1:3921/latest（局域网可用本机 IP 访问）
@@ -103,6 +103,28 @@ node scripts/trigger-export.mjs --url http://192.168.1.10:3921
 curl http://127.0.0.1:3921/export/status
 ```
 
+### 调试：精华区导出到自定义 inbox 文件夹
+
+用于测试「预览 + 全文链接」等待读长文，或快速试跑总结流水线，**不写入日期文件夹**：
+
+```bash
+# 1. 启动 inbox 服务 + 重载扩展（0.9.2）
+node scripts/local-inbox-server.mjs
+
+# 2. 浏览器登录知识星球（可先手动切到「精华」）
+node scripts/debug-export-digests.mjs --slug debug-digests --count 10
+
+# 3. 一键跑 OCR → 总结 → HTML
+node scripts/debug-export-digests.mjs --slug debug-digests --count 10 --pipeline
+
+# 或分步（--slug 适用于所有 pipeline 脚本）
+node scripts/build-daily-pipeline.mjs --slug debug-digests
+```
+
+输出目录：`daily-inbox/debug-digests/` · HTML：`summaries/debug-digests.html`
+
+选项：`--no-reload`（不刷新页）、`--no-navigate`（不自动点「精华」）、`--count N`
+
 导出后在本机终端运行 `node scripts/build-daily-pipeline.mjs` 即可。
 
 ## 配置
@@ -111,4 +133,6 @@ curl http://127.0.0.1:3921/export/status
 
 ## 重载扩展
 
-`manifest.json` 当前 **0.9.0**，请在 `chrome://extensions` 重新加载。
+`manifest.json` 当前 **0.9.2**，请在 `chrome://extensions` 重新加载。
+
+**帖子类型**：`post_kind=article_link`（精华区「预览 + 全文链接」）会进入 HTML「待读长文」，不参与 agent 总结。

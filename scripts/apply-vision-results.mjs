@@ -16,35 +16,23 @@ import {
   resolveInboxPaths,
   saveManifest
 } from './lib/manifest-vision.mjs';
+import { parseInboxFolderArg } from './lib/inbox-slug.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
 
-function todayDateString(date = new Date()) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-function parseArgs(argv) {
-  const args = { date: todayDateString(), input: '', dryRun: false };
-  for (let i = 2; i < argv.length; i++) {
-    if (argv[i] === '--date') args.date = argv[++i];
-    if (argv[i] === '--input') args.input = argv[++i];
-    if (argv[i] === '--dry-run') args.dryRun = true;
+async function main() {
+  const { folder } = parseInboxFolderArg(process.argv);
+  const args = { input: '', dryRun: process.argv.includes('--dry-run') };
+  for (let i = 2; i < process.argv.length; i++) {
+    if (process.argv[i] === '--input') args.input = process.argv[++i];
   }
   if (!args.input) {
-    args.input = path.join(REPO_ROOT, 'daily-inbox', args.date, 'vision-results.json');
+    args.input = path.join(REPO_ROOT, 'daily-inbox', folder, 'vision-results.json');
   } else if (!path.isAbsolute(args.input)) {
     args.input = path.resolve(REPO_ROOT, args.input);
   }
-  return args;
-}
-
-async function main() {
-  const args = parseArgs(process.argv);
-  const { manifestPath } = resolveInboxPaths(REPO_ROOT, args.date);
+  const { manifestPath } = resolveInboxPaths(REPO_ROOT, folder);
 
   const [manifest, resultsRaw] = await Promise.all([
     loadManifest(manifestPath),
@@ -61,7 +49,7 @@ async function main() {
   const { applied, errors, remaining } = applyVisionResults(manifest, results);
 
   const report = {
-    date: args.date,
+    folder,
     input: args.input,
     before,
     applied: applied.length,

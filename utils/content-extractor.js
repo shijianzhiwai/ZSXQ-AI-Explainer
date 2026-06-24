@@ -433,6 +433,21 @@ const ZSXQContentExtractor = {
     const published_at = apiMeta?.published_at || this.extractPublishedAt(scope);
     const tags = this.extractTags(scope, text);
     const images = this.extractImages(post, scope, contentElement, text);
+    const articleLinks = typeof ZSXQArticleLink !== 'undefined'
+      ? ZSXQArticleLink.mergeArticleLinks(
+        ZSXQArticleLink.extractArticleLinksFromDom(scope),
+        apiMeta?.article_links || []
+      )
+      : (apiMeta?.article_links || []);
+    const articleFields = typeof ZSXQArticleLink !== 'undefined'
+      ? ZSXQArticleLink.buildArticleLinkFields(articleLinks)
+      : {
+        post_kind: articleLinks.length ? 'article_link' : 'talk',
+        article_links: articleLinks,
+        article_url: articleLinks[0]?.url || '',
+        article_title: articleLinks[0]?.title || '',
+        include_in_summary: !articleLinks.length
+      };
     const topic_id = apiMeta?.topic_id || this.resolveTopicId(contentElement, text, apiMeta);
     const group_id = apiMeta?.group_id || this.getGroupId();
     const topic_url = apiMeta?.topic_url || this.buildTopicUrl(topic_id, group_id);
@@ -446,7 +461,8 @@ const ZSXQContentExtractor = {
       published_at,
       text,
       tags,
-      images
+      images,
+      ...articleFields
     };
     return {
       ...base,

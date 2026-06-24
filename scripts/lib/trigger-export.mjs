@@ -26,3 +26,31 @@ export async function triggerExport(wsHub, options = {}) {
   const result = await commandPromise;
   return { ok: true, data: result.data };
 }
+
+/**
+ * Export top N posts from current feed (e.g. 精华) to daily-inbox/{slug}/.
+ */
+export async function triggerDebugExport(wsHub, options = {}) {
+  const wait = options.wait !== false;
+  const timeoutMs = Number(options.timeoutMs ?? options.timeout_ms) || DEFAULT_EXPORT_TRIGGER.timeoutMs;
+  const slug = String(options.slug || options.inbox_slug || '').trim();
+  if (!slug) throw new Error('slug is required');
+
+  const payload = {
+    slug,
+    count: Number(options.count) || 10,
+    reload: options.reload === true,
+    navigate_digests: options.navigate_digests !== false,
+    tabUrl: options.tabUrl || options.tab_url || DEFAULT_GROUP_TAB_URL
+  };
+
+  const commandPromise = wsHub.dispatchCommand('debug_export_feed', payload, { timeoutMs });
+
+  if (!wait) {
+    commandPromise.catch(() => {});
+    return { ok: true, accepted: true, slug, count: payload.count };
+  }
+
+  const result = await commandPromise;
+  return { ok: true, data: result.data, slug };
+}

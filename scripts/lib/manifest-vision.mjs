@@ -112,10 +112,11 @@ export async function saveManifest(manifestPath, manifest) {
   await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
 }
 
-export function resolveInboxPaths(repoRoot, date) {
-  const inboxDir = path.join(repoRoot, 'daily-inbox', date);
+export function resolveInboxPaths(repoRoot, folder) {
+  const inboxDir = path.join(repoRoot, 'daily-inbox', folder);
   return {
     inboxDir,
+    folder,
     manifestPath: path.join(inboxDir, 'manifest.json'),
     visionResultsPath: path.join(inboxDir, 'vision-results.json'),
     visionTasksPath: path.join(inboxDir, 'vision-tasks.json')

@@ -10,33 +10,21 @@ import fs from 'node:fs/promises';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { classifyByOcr, enrichImage, preloadPaddleOcr } from './lib/image-enricher.mjs';
+import { parseInboxFolderArg } from './lib/inbox-slug.mjs';
+import { resolveInboxPaths } from './lib/manifest-vision.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
 
-function todayDateString(date = new Date()) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
-function parseArgs(argv) {
-  const args = { date: todayDateString(), dryRun: false, skipOcr: false, reclassifyOnly: false };
-  for (let i = 2; i < argv.length; i++) {
-    if (argv[i] === '--date') args.date = argv[++i];
-    if (argv[i] === '--dry-run') args.dryRun = true;
-    if (argv[i] === '--skip-ocr') args.skipOcr = true;
-    if (argv[i] === '--reclassify-only') args.reclassifyOnly = true;
-  }
-  args.inboxDir = path.join(REPO_ROOT, 'daily-inbox', args.date);
-  args.manifestPath = path.join(args.inboxDir, 'manifest.json');
-  return args;
-}
-
 async function main() {
-  const args = parseArgs(process.argv);
-  const manifestRaw = await fs.readFile(args.manifestPath, 'utf8');
+  const { folder } = parseInboxFolderArg(process.argv);
+  const args = {
+    dryRun: process.argv.includes('--dry-run'),
+    skipOcr: process.argv.includes('--skip-ocr'),
+    reclassifyOnly: process.argv.includes('--reclassify-only')
+  };
+  const { inboxDir, manifestPath } = resolveInboxPaths(REPO_ROOT, folder);
+  const manifestRaw = await fs.readFile(manifestPath, 'utf8');
   const manifest = JSON.parse(manifestRaw);
 
   const stats = {
@@ -49,14 +37,14 @@ async function main() {
     errors: 0
   };
 
-  console.log(`Enriching ${args.manifestPath}`);
+  console.log(`Enriching ${manifestPath}`);
   const ocrMode = args.reclassifyOnly ? 'reclassify-only' : (args.skipOcr ? 'off' : 'paddleocr');
   console.log(`OCR: ${ocrMode} | Vision: cursor agent (run-vision-agent.mjs)`);
 
   const imagePaths = [];
   for (const post of manifest.posts || []) {
     for (const image of post.images || []) {
-      const imagePath = path.join(args.inboxDir, image.file);
+      const imagePath = path.join(inboxDir, image.file);
       try {
         await fs.access(imagePath);
         imagePaths.push(imagePath);
@@ -74,7 +62,7 @@ async function main() {
   for (const post of manifest.posts || []) {
     for (const image of post.images || []) {
       stats.total += 1;
-      const imagePath = path.join(args.inboxDir, image.file);
+      const imagePath = path.join(inboxDir, image.file);
       try {
         await fs.access(imagePath);
       } catch {
@@ -138,19 +126,19 @@ async function main() {
   };
 
   if (!args.dryRun) {
-    await fs.writeFile(args.manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
+    await fs.writeFile(manifestPath, JSON.stringify(manifest, null, 2), 'utf8');
     await fs.writeFile(
-      path.join(args.inboxDir, 'enrich-report.json'),
-      JSON.stringify({ date: args.date, ...stats }, null, 2),
+      path.join(inboxDir, 'enrich-report.json'),
+      JSON.stringify({ folder, ...stats }, null, 2),
       'utf8'
     );
   }
 
   console.log('Done:', stats);
   if (stats.needs_vision > 0) {
-    console.log(`${stats.needs_vision} images marked needs_vision — run: node scripts/run-vision-agent.mjs --date ${args.date}`);
+    console.log(`${stats.needs_vision} images marked needs_vision — run: node scripts/run-vision-agent.mjs --slug ${folder}`);
   }
-  if (!args.dryRun) console.log(`Updated ${args.manifestPath}`);
+  if (!args.dryRun) console.log(`Updated ${manifestPath}`);
 }
 
 main().catch((error) => {

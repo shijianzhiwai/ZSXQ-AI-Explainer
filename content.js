@@ -2,30 +2,53 @@
 console.log('ZSXQ Extension version:', chrome.runtime.getManifest().version);
 
 // 监听来自 background.js 的消息
-chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
+chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
   if (request.action === "getTextNearCursor") {
-    const record = getContentRecordNearCursor(request.x, request.y);
-    if (record) {
-      await showStreamResponse(record.ai_payload || record.text);
-    } else {
-      await showResultPopup('未找到有效内容，请在内容区域右键', true);
-    }
+    (async () => {
+      const record = getContentRecordNearCursor(request.x, request.y);
+      if (record) {
+        await showStreamResponse(record.ai_payload || record.text);
+      } else {
+        await showResultPopup('未找到有效内容，请在内容区域右键', true);
+      }
+    })();
+    return;
   }
 
   if (request.action === 'runDailyExport') {
-    const run = async () => {
+    (async () => {
       for (let attempt = 0; attempt < 20; attempt++) {
-        const exporter = window.ZSXQExtractor?.exportIncremental;
+        const exporter = window.zsxqExtractor?.exportIncremental;
         if (exporter) {
-          return exporter({ silent: request.silent !== false });
+          const result = await exporter({ silent: request.silent !== false });
+          sendResponse(result || { ok: false, error: 'empty export result' });
+          return;
         }
         await new Promise((resolve) => setTimeout(resolve, 500));
       }
-      return { ok: false, error: 'ZSXQExtractor not ready' };
-    };
-    run()
-      .then((result) => sendResponse(result || { ok: false, error: 'empty export result' }))
-      .catch((error) => sendResponse({ ok: false, error: error.message }));
+      sendResponse({ ok: false, error: 'zsxqExtractor not ready' });
+    })();
+    return true;
+  }
+
+  if (request.action === 'runDebugFeedExport') {
+    (async () => {
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const exporter = window.zsxqExtractor?.exportDebugFeed;
+        if (exporter) {
+          const result = await exporter({
+            silent: request.silent !== false,
+            slug: request.slug,
+            count: request.count,
+            navigate_digests: request.navigate_digests
+          });
+          sendResponse(result || { ok: false, error: 'empty debug export result' });
+          return;
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      sendResponse({ ok: false, error: 'zsxqExtractor not ready' });
+    })();
     return true;
   }
 });

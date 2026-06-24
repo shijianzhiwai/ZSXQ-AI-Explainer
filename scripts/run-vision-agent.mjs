@@ -15,21 +15,14 @@ import {
   loadManifest,
   resolveInboxPaths
 } from './lib/manifest-vision.mjs';
+import { inboxCliArgs, parseInboxFolderArg } from './lib/inbox-slug.mjs';
 import { spawn } from 'node:child_process';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
-function todayDateString(date = new Date()) {
-  const y = date.getFullYear();
-  const m = String(date.getMonth() + 1).padStart(2, '0');
-  const d = String(date.getDate()).padStart(2, '0');
-  return `${y}-${m}-${d}`;
-}
-
 function parseArgs(argv) {
-  const args = { date: todayDateString(), batchSize: 15, dryRun: false };
+  const args = { batchSize: 15, dryRun: false };
   for (let i = 2; i < argv.length; i++) {
-    if (argv[i] === '--date') args.date = argv[++i];
     if (argv[i] === '--batch-size') args.batchSize = Number(argv[++i]);
     if (argv[i] === '--dry-run') args.dryRun = true;
   }
@@ -56,8 +49,9 @@ function runNodeScript(script, scriptArgs) {
 }
 
 async function main() {
+  const { folder } = parseInboxFolderArg(process.argv);
   const args = parseArgs(process.argv);
-  const { inboxDir, manifestPath } = resolveInboxPaths(REPO_ROOT, args.date);
+  const { inboxDir, manifestPath } = resolveInboxPaths(REPO_ROOT, folder);
   const visionResultsPath = path.join(inboxDir, 'vision-results.json');
   const visionBatchPath = path.join(inboxDir, 'vision-batch.json');
   const promptTemplate = await readPromptTemplate();
@@ -69,13 +63,13 @@ async function main() {
     const manifest = await loadManifest(manifestPath);
     const tasks = collectVisionTasks(manifest, { limit: args.batchSize });
     if (!tasks.length) {
-      console.log(`Vision complete for ${args.date} (${totalApplied} images applied)`);
+      console.log(`Vision complete for ${folder} (${totalApplied} images applied)`);
       break;
     }
 
     round += 1;
     const batchPayload = {
-      date: args.date,
+      date: folder,
       inbox_dir: inboxDir,
       round,
       tasks: tasks.map((task) => ({
@@ -92,11 +86,11 @@ async function main() {
       break;
     }
 
-    const prompt = `${promptTemplate.replaceAll('{DATE}', args.date)}
+    const prompt = `${promptTemplate.replaceAll('{DATE}', folder)}
 
-DATE=${args.date}
-Batch file: daily-inbox/${args.date}/vision-batch.json
-Output file: daily-inbox/${args.date}/vision-results.json`;
+DATE=${folder}
+Batch file: daily-inbox/${folder}/vision-batch.json
+Output file: daily-inbox/${folder}/vision-results.json`;
 
     const visionModel = process.env.CURSOR_VISION_MODEL || 'auto';
     console.log(`Vision agent model: ${visionModel}`);
@@ -106,7 +100,7 @@ Output file: daily-inbox/${args.date}/vision-results.json`;
 
     await runNodeScript(
       path.join(__dirname, 'apply-vision-results.mjs'),
-      ['--date', args.date, '--input', visionResultsPath]
+      [...inboxCliArgs(folder), '--input', visionResultsPath]
     );
 
     totalApplied += tasks.length;

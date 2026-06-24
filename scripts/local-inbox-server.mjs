@@ -17,9 +17,12 @@
  * GET  /daily-inbox/...           manifest, images, report.html
  * WS   /ws                        extension bridge (refresh_and_export)
  * POST /export/trigger            dispatch export command to extension
+ * POST /export/debug               export top N digests posts to daily-inbox/{slug}/
  * GET  /export/status             websocket client status
  *
- * Scheduled export (default on): daily at 13:00 local time
+ * Scheduled job (default on): daily at 13:00 local time
+ *   1. incremental export (WebSocket → extension)
+ *   2. build-daily-pipeline (OCR → vision → summary → HTML)
  *   --no-schedule                 disable
  *   --schedule 13:00              override time (HH:MM)
  */
@@ -29,8 +32,10 @@ import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { attachInboxWebSocket, inboxWsUrl } from './lib/inbox-ws-hub.mjs';
-import { triggerExport } from './lib/trigger-export.mjs';
+import { triggerExport, triggerDebugExport } from './lib/trigger-export.mjs';
 import { parseScheduleTime, scheduleDailyAt } from './lib/daily-schedule.mjs';
+import { todayDateString } from './lib/inbox-slug.mjs';
+import { runDailyPipeline } from './lib/run-daily-pipeline.mjs';
 
 export const DEFAULT_PORT = 3921;
 
@@ -330,6 +335,20 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === 'POST' && req.url === '/export/debug') {
+    try {
+      const body = await readJson(req);
+      const result = await triggerDebugExport(wsHub, body);
+      const status = body.wait === false ? 202 : 200;
+      res.writeHead(status, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(result));
+    } catch (error) {
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: error.message }));
+    }
+    return;
+  }
+
   res.writeHead(404, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ ok: false, error: 'not found' }));
 });
@@ -340,16 +359,27 @@ function startScheduledExport() {
   if (!schedule) return;
   const { hour, minute } = parseScheduleTime(scheduleTime);
   scheduleDailyAt(hour, minute, async () => {
-    console.log('[schedule] triggering daily incremental export…');
+    console.log('[schedule] step 1/2: incremental export…');
     const result = await triggerExport(wsHub, { reload: true, wait: true });
+
+    if (result.data?.ok === false) {
+      throw new Error(result.data.error || 'incremental export failed');
+    }
+
     const posts = result.data?.manifest?.post_count;
     const images = result.data?.manifest?.image_count;
+    const date = result.data?.manifest?.date || todayDateString();
+
     if (posts != null) {
-      console.log(`[schedule] export done: ${posts} posts, ${images ?? 0} images`);
+      console.log(`[schedule] export done: ${posts} posts, ${images ?? 0} images → daily-inbox/${date}/`);
     } else {
       console.log('[schedule] export done:', JSON.stringify(result.data || result));
     }
-  }, { label: 'daily export' });
+
+    console.log(`[schedule] step 2/2: pipeline for ${date}…`);
+    const pipeline = await runDailyPipeline(date);
+    console.log(`[schedule] pipeline done → ${pipeline.reportUrl}`);
+  }, { label: 'daily export + pipeline' });
 }
 
 function startServer() {
@@ -363,8 +393,9 @@ function startServer() {
       console.log(`WS:       ${inboxWsUrl(port, addr)}`);
     }
     console.log(`Trigger:  node scripts/trigger-export.mjs`);
+    console.log(`Debug:    node scripts/debug-export-digests.mjs --slug debug-digests --count 10`);
     if (schedule) {
-      console.log(`Schedule: daily export at ${scheduleTime} (local), --no-schedule to disable`);
+      console.log(`Schedule: daily export + pipeline at ${scheduleTime} (local), --no-schedule to disable`);
     }
     console.log(`Index:    http://127.0.0.1:${port}/`);
     startScheduledExport();
