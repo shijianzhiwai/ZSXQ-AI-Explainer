@@ -23,9 +23,9 @@ export function buildLeanManifest(manifest) {
         if (img.image_kind === 'chart' && img.chart_summary) {
           lean.chart_summary = img.chart_summary;
         } else if (img.image_kind === 'text' && img.ocr_text) {
-          lean.ocr_text = img.ocr_text;
+          lean.image_content = img.ocr_text;
         } else if (img.ocr_text) {
-          lean.ocr_text = img.ocr_text;
+          lean.image_content = img.ocr_text;
         }
         if (img.chart_summary && img.image_kind === 'chart') {
           lean.chart_summary = img.chart_summary;
@@ -42,8 +42,8 @@ export function buildLeanManifest(manifest) {
     hints: {
       style: 'Write facts + analysis + takeaway per post/section; preserve numbers and names; do not over-compress',
       topic_url: 'Include topic_url as source link in posts[] when citing original',
-      text_images: 'Use ocr_text in summary text only; do not put in posts[].images',
-      chart_images: 'Put chart images in posts[].images with file + caption (chart_summary)',
+      text_images: 'Merge image_content into facts naturally; never say OCR in output; do not put in posts[].images',
+      chart_images: 'Merge chart_summary into facts/analysis naturally; put chart file in posts[].images with caption',
       skip: 'photo and include_in_summary=false'
     }
   };

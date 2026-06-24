@@ -11,6 +11,23 @@ chrome.runtime.onMessage.addListener(async (request, sender, sendResponse) => {
       await showResultPopup('未找到有效内容，请在内容区域右键', true);
     }
   }
+
+  if (request.action === 'runDailyExport') {
+    const run = async () => {
+      for (let attempt = 0; attempt < 20; attempt++) {
+        const exporter = window.ZSXQExtractor?.exportIncremental;
+        if (exporter) {
+          return exporter({ silent: request.silent !== false });
+        }
+        await new Promise((resolve) => setTimeout(resolve, 500));
+      }
+      return { ok: false, error: 'ZSXQExtractor not ready' };
+    };
+    run()
+      .then((result) => sendResponse(result || { ok: false, error: 'empty export result' }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
 });
 
 

@@ -6,11 +6,204 @@ chrome.runtime.onInstalled.addListener(() => {
     contexts: ["all"],
     documentUrlPatterns: ["*://*.zsxq.com/group/28518511148841*"]  // 只在知识星球网站显示
   });
+  chrome.alarms.create('inbox-ws-reconnect', { periodInMinutes: 1 });
+  ensureInboxWebSocket();
+});
+
+chrome.runtime.onStartup.addListener(() => {
+  ensureInboxWebSocket();
+});
+
+chrome.alarms.onAlarm.addListener((alarm) => {
+  if (alarm.name === 'inbox-ws-reconnect') {
+    ensureInboxWebSocket();
+  }
 });
 
 let lastClickedCoordinates = null;
 
 const ZSXQ_REFERER = 'https://wx.zsxq.com/';
+const DEFAULT_GROUP_URL = 'https://wx.zsxq.com/group/28518511148841';
+
+let inboxWs = null;
+let inboxWsConnecting = false;
+let inboxWsUrlStored = null;
+
+function httpToWsUrl(httpUrl) {
+  const parsed = new URL(httpUrl.replace(/\/$/, ''));
+  parsed.protocol = parsed.protocol === 'https:' ? 'wss:' : 'ws:';
+  parsed.pathname = '/ws';
+  parsed.search = '';
+  parsed.hash = '';
+  return parsed.toString();
+}
+
+function sendInboxWs(message) {
+  if (inboxWs?.readyState === WebSocket.OPEN) {
+    inboxWs.send(JSON.stringify(message));
+  }
+}
+
+async function ensureInboxWebSocket() {
+  const config = await getPipelineConfig();
+  const wsUrl = httpToWsUrl(config.inboxServerUrl);
+
+  if (inboxWs && inboxWsUrlStored === wsUrl) {
+    if (inboxWs.readyState === WebSocket.OPEN || inboxWs.readyState === WebSocket.CONNECTING) {
+      return;
+    }
+  }
+
+  if (inboxWsConnecting) return;
+  inboxWsConnecting = true;
+
+  try {
+    if (inboxWs) {
+      inboxWs.onclose = null;
+      inboxWs.onerror = null;
+      inboxWs.onmessage = null;
+      inboxWs.close();
+      inboxWs = null;
+    }
+
+    inboxWsUrlStored = wsUrl;
+    const socket = new WebSocket(wsUrl);
+    inboxWs = socket;
+
+    socket.onopen = () => {
+      inboxWsConnecting = false;
+      sendInboxWs({
+        type: 'hello',
+        role: 'extension',
+        version: chrome.runtime.getManifest().version
+      });
+      console.log('[inbox-ws] connected', wsUrl);
+    };
+
+    socket.onmessage = (event) => {
+      let message;
+      try {
+        message = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+
+      if (message.type === 'ping') {
+        sendInboxWs({ type: 'pong', ts: message.ts });
+        return;
+      }
+
+      if (message.type === 'command' && message.action === 'refresh_and_export') {
+        handleRefreshAndExportCommand(message);
+      }
+    };
+
+    socket.onclose = () => {
+      inboxWsConnecting = false;
+      if (inboxWs === socket) inboxWs = null;
+      console.log('[inbox-ws] disconnected');
+    };
+
+    socket.onerror = () => {
+      inboxWsConnecting = false;
+    };
+  } catch (error) {
+    inboxWsConnecting = false;
+    console.warn('[inbox-ws] connect failed:', error.message);
+  }
+}
+
+async function handleRefreshAndExportCommand(message) {
+  const { id, payload = {} } = message;
+  try {
+    const data = await runRefreshAndExport(payload);
+    sendInboxWs({
+      type: 'command_result',
+      id,
+      ok: data?.ok !== false,
+      data,
+      error: data?.ok === false ? data.error : undefined
+    });
+  } catch (error) {
+    sendInboxWs({
+      type: 'command_result',
+      id,
+      ok: false,
+      error: error.message
+    });
+  }
+}
+
+function waitForTabLoad(tabId, timeoutMs = 120_000) {
+  return new Promise((resolve, reject) => {
+    const timer = setTimeout(() => {
+      chrome.tabs.onUpdated.removeListener(listener);
+      reject(new Error('tab load timeout'));
+    }, timeoutMs);
+
+    function listener(updatedTabId, info) {
+      if (updatedTabId === tabId && info.status === 'complete') {
+        clearTimeout(timer);
+        chrome.tabs.onUpdated.removeListener(listener);
+        setTimeout(resolve, 2000);
+      }
+    }
+
+    chrome.tabs.onUpdated.addListener(listener);
+    chrome.tabs.get(tabId).then((tab) => {
+      if (tab.status === 'complete') {
+        clearTimeout(timer);
+        chrome.tabs.onUpdated.removeListener(listener);
+        setTimeout(resolve, 2000);
+      }
+    }).catch((error) => {
+      clearTimeout(timer);
+      chrome.tabs.onUpdated.removeListener(listener);
+      reject(error);
+    });
+  });
+}
+
+async function findGroupTab(tabUrl) {
+  const pattern = '*://*.zsxq.com/group/*';
+  const tabs = await chrome.tabs.query({ url: pattern });
+  const target = tabUrl || DEFAULT_GROUP_URL;
+  const groupId = target.match(/group\/(\d+)/)?.[1];
+  if (groupId) {
+    const matched = tabs.find((tab) => tab.url?.includes(`/group/${groupId}`));
+    if (matched) return matched;
+  }
+  return tabs[0] || null;
+}
+
+async function runRefreshAndExport({ reload = true, tabUrl } = {}) {
+  const targetUrl = tabUrl || DEFAULT_GROUP_URL;
+  let tab = await findGroupTab(targetUrl);
+
+  if (!tab) {
+    tab = await chrome.tabs.create({ url: targetUrl, active: false });
+    await waitForTabLoad(tab.id);
+  } else if (reload) {
+    await chrome.tabs.reload(tab.id);
+    await waitForTabLoad(tab.id);
+  }
+
+  const response = await chrome.tabs.sendMessage(tab.id, {
+    action: 'runDailyExport',
+    silent: true
+  });
+
+  if (!response) {
+    throw new Error('content script did not respond');
+  }
+  return response;
+}
+
+chrome.storage.onChanged.addListener((changes, area) => {
+  if (area === 'local' && changes.inboxServerUrl) {
+    ensureInboxWebSocket();
+  }
+});
 
 async function fetchImageAsDataUrl(url) {
   const response = await fetch(url, {
@@ -128,6 +321,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
   }
+
+  if (request.action === 'ensureInboxWebSocket') {
+    ensureInboxWebSocket()
+      .then(() => sendResponse({ ok: true, connected: inboxWs?.readyState === WebSocket.OPEN }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
 });
 
 // 处理右键菜单点击
@@ -141,3 +341,5 @@ chrome.contextMenus.onClicked.addListener((info, tab) => {
     lastClickedCoordinates = null; // 清除坐标
   }
 });
+
+ensureInboxWebSocket();

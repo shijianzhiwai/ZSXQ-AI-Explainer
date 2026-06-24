@@ -1,29 +1,88 @@
 #!/usr/bin/env node
 /**
  * Local bridge: browser extension → repo daily-inbox/
+ * Also serves summary HTML and inbox assets over HTTP.
  *
  * Usage:
  *   node scripts/local-inbox-server.mjs
  *   node scripts/local-inbox-server.mjs --port 3921 --root .
+ *   node scripts/local-inbox-server.mjs --host 127.0.0.1   # localhost only
  *
  * POST /inbox/daily
  * Body: { date, manifest, images: [{ file, data_url }] }
+ *
+ * GET  /                          index of available reports
+ * GET  /latest                    redirect to newest summary
+ * GET  /summaries/YYYY-MM-DD.html daily report (images via ../daily-inbox/...)
+ * GET  /daily-inbox/...           manifest, images, report.html
+ * WS   /ws                        extension bridge (refresh_and_export)
+ * POST /export/trigger            dispatch export command to extension
+ * GET  /export/status             websocket client status
+ *
+ * Scheduled export (default on): daily at 13:00 local time
+ *   --no-schedule                 disable
+ *   --schedule 13:00              override time (HH:MM)
  */
 import http from 'node:http';
 import fs from 'node:fs/promises';
+import os from 'node:os';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { attachInboxWebSocket, inboxWsUrl } from './lib/inbox-ws-hub.mjs';
+import { triggerExport } from './lib/trigger-export.mjs';
+import { parseScheduleTime, scheduleDailyAt } from './lib/daily-schedule.mjs';
+
+export const DEFAULT_PORT = 3921;
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
+const MIME = {
+  '.html': 'text/html; charset=utf-8',
+  '.json': 'application/json; charset=utf-8',
+  '.css': 'text/css; charset=utf-8',
+  '.js': 'text/javascript; charset=utf-8',
+  '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.webp': 'image/webp',
+  '.gif': 'image/gif',
+  '.svg': 'image/svg+xml',
+  '.ico': 'image/x-icon'
+};
+
 function parseArgs(argv) {
-  const args = { port: 3921, root: path.resolve(__dirname, '..') };
+  const args = {
+    port: DEFAULT_PORT,
+    host: '0.0.0.0',
+    root: path.resolve(__dirname, '..'),
+    schedule: true,
+    scheduleTime: '13:00'
+  };
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--port') args.port = Number(argv[++i]);
+    if (argv[i] === '--host') args.host = argv[++i];
     if (argv[i] === '--root') args.root = path.resolve(argv[++i]);
+    if (argv[i] === '--no-schedule') args.schedule = false;
+    if (argv[i] === '--schedule') args.scheduleTime = argv[++i];
   }
   return args;
 }
+
+export function getLanAddresses() {
+  const addrs = [];
+  for (const nets of Object.values(os.networkInterfaces())) {
+    for (const net of nets || []) {
+      if (net.family === 'IPv4' && !net.internal) addrs.push(net.address);
+    }
+  }
+  return addrs;
+}
+
+export function summaryReportUrl(date, port = DEFAULT_PORT, host = '127.0.0.1') {
+  return `http://${host}:${port}/summaries/${date}.html`;
+}
+
+export { inboxWsUrl };
 
 function dataUrlToBuffer(dataUrl) {
   const base64 = dataUrl.includes(',') ? dataUrl.split(',')[1] : dataUrl;
@@ -77,7 +136,7 @@ function readJson(req) {
     req.on('end', () => {
       try {
         resolve(raw ? JSON.parse(raw) : {});
-      } catch (error) {
+      } catch {
         reject(new Error('invalid JSON'));
       }
     });
@@ -85,7 +144,143 @@ function readJson(req) {
   });
 }
 
-const { port, root } = parseArgs(process.argv);
+function resolveSafePath(root, urlPath) {
+  const pathname = decodeURIComponent(String(urlPath || '/').split('?')[0]);
+  const rel = pathname.replace(/^\/+/, '');
+  const abs = path.resolve(root, rel || '.');
+  const rootWithSep = root.endsWith(path.sep) ? root : `${root}${path.sep}`;
+  if (abs !== root && !abs.startsWith(rootWithSep)) return null;
+  return abs;
+}
+
+async function listSummaryDates(root) {
+  const dir = path.join(root, 'summaries');
+  try {
+    const files = await fs.readdir(dir);
+    return files
+      .filter((file) => /^\d{4}-\d{2}-\d{2}\.html$/.test(file))
+      .map((file) => file.replace(/\.html$/, ''))
+      .sort()
+      .reverse();
+  } catch {
+    return [];
+  }
+}
+
+function renderIndex(dates, baseUrl) {
+  const items = dates.length
+    ? dates.map((date) => {
+      const href = `/summaries/${date}.html`;
+      return `<li><a href="${href}">${date}</a> · <a href="/daily-inbox/${date}/report.html">report</a></li>`;
+    }).join('\n')
+    : '<li>暂无日报，请先运行 <code>node scripts/build-daily-pipeline.mjs</code></li>';
+
+  return `<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>每日总结</title>
+  <style>
+    body { font-family: system-ui, sans-serif; max-width: 720px; margin: 48px auto; padding: 0 20px; color: #31302e; }
+    h1 { font-size: 1.5rem; }
+    a { color: #0075de; }
+    code { background: #f6f5f4; padding: 2px 6px; border-radius: 4px; }
+  </style>
+</head>
+<body>
+  <h1>每日总结</h1>
+  <p>服务地址 <code>${baseUrl}</code></p>
+  <ul>${items}</ul>
+</body>
+</html>`;
+}
+
+async function serveFile(root, urlPath, res, method = 'GET') {
+  let abs = resolveSafePath(root, urlPath);
+  if (!abs) {
+    res.writeHead(403, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Forbidden');
+    return;
+  }
+
+  let stat;
+  try {
+    stat = await fs.stat(abs);
+  } catch {
+    res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+    res.end('Not Found');
+    return;
+  }
+
+  if (stat.isDirectory()) {
+    const indexPath = path.join(abs, 'index.html');
+    try {
+      await fs.stat(indexPath);
+      abs = indexPath;
+    } catch {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('Not Found');
+      return;
+    }
+  }
+
+  const ext = path.extname(abs).toLowerCase();
+  const type = MIME[ext] || 'application/octet-stream';
+  const body = method === 'HEAD' ? null : await fs.readFile(abs);
+  res.writeHead(200, {
+    'Content-Type': type,
+    'Cache-Control': ext === '.html' ? 'no-cache, no-store, must-revalidate' : 'public, max-age=60'
+  });
+  res.end(body);
+}
+
+async function handleBrowse(root, req, res, port) {
+  const host = req.headers.host || `127.0.0.1:${port}`;
+  const baseUrl = `http://${host}`;
+  const url = new URL(req.url || '/', baseUrl);
+
+  if (url.pathname === '/health') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({
+      ok: true,
+      root,
+      websocket: wsHub.getStatus()
+    }));
+    return;
+  }
+
+  if (url.pathname === '/export/status') {
+    res.writeHead(200, { 'Content-Type': 'application/json' });
+    res.end(JSON.stringify({ ok: true, ...wsHub.getStatus() }));
+    return;
+  }
+
+  if (url.pathname === '/') {
+    const dates = await listSummaryDates(root);
+    res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
+    res.end(renderIndex(dates, baseUrl));
+    return;
+  }
+
+  if (url.pathname === '/latest') {
+    const dates = await listSummaryDates(root);
+    if (!dates.length) {
+      res.writeHead(404, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end('No summary HTML found');
+      return;
+    }
+    res.writeHead(302, { Location: `/summaries/${dates[0]}.html` });
+    res.end();
+    return;
+  }
+
+  await serveFile(root, url.pathname, res, req.method);
+}
+
+const { port, host, root, schedule, scheduleTime } = parseArgs(process.argv);
+
+let wsHub;
 
 const server = http.createServer(async (req, res) => {
   res.setHeader('Access-Control-Allow-Origin', '*');
@@ -98,9 +293,13 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
-  if (req.method === 'GET' && req.url === '/health') {
-    res.writeHead(200, { 'Content-Type': 'application/json' });
-    res.end(JSON.stringify({ ok: true, root }));
+  if (req.method === 'GET' || req.method === 'HEAD') {
+    try {
+      await handleBrowse(root, req, res, port);
+    } catch (error) {
+      res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' });
+      res.end(error.message);
+    }
     return;
   }
 
@@ -117,11 +316,64 @@ const server = http.createServer(async (req, res) => {
     return;
   }
 
+  if (req.method === 'POST' && req.url === '/export/trigger') {
+    try {
+      const body = await readJson(req);
+      const result = await triggerExport(wsHub, body);
+      const status = body.wait === false ? 202 : 200;
+      res.writeHead(status, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify(result));
+    } catch (error) {
+      res.writeHead(503, { 'Content-Type': 'application/json' });
+      res.end(JSON.stringify({ ok: false, error: error.message }));
+    }
+    return;
+  }
+
   res.writeHead(404, { 'Content-Type': 'application/json' });
   res.end(JSON.stringify({ ok: false, error: 'not found' }));
 });
 
-server.listen(port, '127.0.0.1', () => {
-  console.log(`ZSXQ inbox server listening on http://127.0.0.1:${port}`);
-  console.log(`Writing to ${path.join(root, 'daily-inbox')}`);
-});
+wsHub = attachInboxWebSocket(server, { path: '/ws' });
+
+function startScheduledExport() {
+  if (!schedule) return;
+  const { hour, minute } = parseScheduleTime(scheduleTime);
+  scheduleDailyAt(hour, minute, async () => {
+    console.log('[schedule] triggering daily incremental export…');
+    const result = await triggerExport(wsHub, { reload: true, wait: true });
+    const posts = result.data?.manifest?.post_count;
+    const images = result.data?.manifest?.image_count;
+    if (posts != null) {
+      console.log(`[schedule] export done: ${posts} posts, ${images ?? 0} images`);
+    } else {
+      console.log('[schedule] export done:', JSON.stringify(result.data || result));
+    }
+  }, { label: 'daily export' });
+}
+
+function startServer() {
+  server.listen(port, host, () => {
+    console.log(`ZSXQ inbox server listening on http://${host}:${port}`);
+    console.log(`Writing to ${path.join(root, 'daily-inbox')}`);
+    console.log(`WebSocket ${inboxWsUrl(port, '127.0.0.1')}`);
+    console.log(`Local:    http://127.0.0.1:${port}/latest`);
+    for (const addr of getLanAddresses()) {
+      console.log(`Network:  http://${addr}:${port}/latest`);
+      console.log(`WS:       ${inboxWsUrl(port, addr)}`);
+    }
+    console.log(`Trigger:  node scripts/trigger-export.mjs`);
+    if (schedule) {
+      console.log(`Schedule: daily export at ${scheduleTime} (local), --no-schedule to disable`);
+    }
+    console.log(`Index:    http://127.0.0.1:${port}/`);
+    startScheduledExport();
+  });
+}
+
+const isMain = process.argv[1]
+  && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url);
+
+if (isMain) {
+  startServer();
+}

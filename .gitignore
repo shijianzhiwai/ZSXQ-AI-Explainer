@@ -5,3 +5,4 @@ summaries/*.html
 .python-version
 *.DS_Store
 .venv/
+node_modules/

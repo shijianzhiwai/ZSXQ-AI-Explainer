@@ -129,7 +129,9 @@ async function main() {
 
   const htmlPath = path.join(REPO_ROOT, 'summaries', `${date}.html`);
   const reportPath = path.join(REPO_ROOT, 'daily-inbox', date, 'report.html');
-  console.log(`\nDone → ${htmlPath}`);
+  const { summaryReportUrl, DEFAULT_PORT } = await import('./local-inbox-server.mjs');
+  console.log(`\nDone → ${summaryReportUrl(date, DEFAULT_PORT)}`);
+  console.log(`     → ${htmlPath}`);
   console.log(`     → ${reportPath}`);
 }
 

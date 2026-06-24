@@ -12,6 +12,7 @@ import path from 'node:path';
 import { spawn } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 import { attachTopicUrls } from './lib/topic-url.mjs';
+import { DEFAULT_PORT, getLanAddresses, summaryReportUrl } from './local-inbox-server.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -62,6 +63,8 @@ function resolveOutputTargets(date, outOverride = '') {
 }
 
 function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
+  const pageTitle = `${date} 每日总结`;
+  const footerLine = renderFooterLine(manifest, summary, builtAt);
   const sections = (summary.sections || []).map((section) => renderSectionBlock(section)).join('\n');
   const postBlocks = summary.posts?.length
     ? renderPostBlocks(summary.posts, inboxRel, urlMaps)
@@ -82,7 +85,7 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
   <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
   <meta http-equiv="Pragma" content="no-cache">
   <meta http-equiv="Expires" content="0">
-  <title>${escapeHtml(manifest.group || '知识星球')} — ${escapeHtml(date)} 日报</title>
+  <title>${escapeHtml(date)} 日报</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -406,10 +409,12 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
       text-align: center;
     }
     footer .build-stamp {
-      display: block;
-      margin-top: 8px;
       font-size: 12px;
       color: var(--ink-faint);
+    }
+    footer .footer-line {
+      margin: 0;
+      line-height: 1.43;
     }
     @media (max-width: 640px) {
       .hero-band { padding: 24px 16px 32px; }
@@ -424,8 +429,8 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
 <body>
   <header class="hero-band">
     <div class="hero-inner">
-      <p class="page-label">每日总结 · ${escapeHtml(manifest.group || '知识星球')}</p>
-      <h1>${escapeHtml(summary.title || `${manifest.group || '知识星球'} 每日总结`)}</h1>
+      <p class="page-label">每日总结</p>
+      <h1>${escapeHtml(pageTitle)}</h1>
       <p class="page-meta">${escapeHtml(date)} · ${manifest.post_count || 0} 帖 · ${manifest.image_count || 0} 图</p>
     </div>
   </header>
@@ -445,8 +450,7 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
     </section>
   </div>
   <footer>
-    由 ZSXQ-AI-Explainer 每日流水线生成
-    <span class="build-stamp">layout=notion-paper · built=${escapeHtml(builtAt)}</span>
+    <p class="footer-line">${footerLine}</p>
   </footer>
 </body>
 </html>`;
@@ -458,6 +462,30 @@ function escapeHtml(value) {
     .replace(/</g, '&lt;')
     .replace(/>/g, '&gt;')
     .replace(/"/g, '&quot;');
+}
+
+function collectAuthors(manifest, summary) {
+  const posts = summary.posts?.length ? summary.posts : (manifest.posts || []);
+  const seen = new Set();
+  const authors = [];
+  for (const post of posts) {
+    const name = String(post.author || '').trim();
+    if (!name || seen.has(name)) continue;
+    seen.add(name);
+    authors.push(name);
+  }
+  return authors;
+}
+
+function renderFooterLine(manifest, summary, builtAt) {
+  const parts = [];
+  const group = String(manifest.group || '').trim();
+  const authors = collectAuthors(manifest, summary);
+  if (group) parts.push(`星球 ${escapeHtml(group)}`);
+  if (authors.length) parts.push(`作者 ${escapeHtml(authors.join('、'))}`);
+  parts.push('由 ZSXQ-AI-Explainer 每日流水线生成');
+  const main = parts.join(' · ');
+  return `${main}<span class="build-stamp"> · layout=notion-paper · built=${escapeHtml(builtAt)}</span>`;
 }
 
 function splitSourceLink(text) {
@@ -477,8 +505,17 @@ function renderBulletItem(bullet) {
   return `<li class="bullet-item">${renderSourceBadge(url)}<span class="bullet-text">${markdownLite(body)}</span></li>`;
 }
 
-function markdownLite(text) {
+function sanitizeAgentProse(text) {
   let s = String(text ?? '');
+  s = s.replace(/OCR\s*(进一步称|同时提醒|还称|另称|补充称|显示|提到|指出|表明)[，,：:\s]*/gi, '');
+  s = s.replace(/截图\s*(OCR|识别|文字)?\s*(显示|表明|提到|指出)[，,：:\s]*/gi, '');
+  s = s.replace(/图片\s*(内容)?\s*OCR\s*/gi, '');
+  s = s.replace(/（?\s*来自截图[^）]*）/g, '');
+  return s;
+}
+
+function markdownLite(text) {
+  let s = sanitizeAgentProse(text);
   s = s.replace(/\[([^\]]+)\]\((https?:\/\/[^\s)]+)\)/g, (_, label, url) => {
     return `%%LINK:${encodeURIComponent(url)}:${label}%%`;
   });
@@ -597,7 +634,6 @@ function renderPostBlocks(posts, inboxRel, urlMaps) {
       <article class="post">
         ${sourceBadge}
         <header>
-          <h3>${escapeHtml(post.author || '未知作者')}</h3>
           <time>${escapeHtml(post.published_at || '')}</time>
         </header>
         ${renderPostContent(post)}
@@ -657,12 +693,18 @@ async function main() {
 
   const primaryHtml = path.join(REPO_ROOT, 'summaries', `${args.date}.html`);
   const reportPath = path.join(REPO_ROOT, 'daily-inbox', args.date, 'report.html');
-  console.log(`\n主报告（推荐，图片路径已验证）：\n  ${primaryHtml}`);
+  const reportUrl = summaryReportUrl(args.date, DEFAULT_PORT);
+  const lanAddrs = getLanAddresses();
+  console.log(`\n浏览器打开（需先运行 local-inbox-server）：\n  ${reportUrl}`);
+  if (lanAddrs.length) {
+    console.log(`局域网：${lanAddrs.map((addr) => summaryReportUrl(args.date, DEFAULT_PORT, addr)).join('\n        ')}`);
+  }
+  console.log(`文件：${primaryHtml}`);
   console.log(`副本：${reportPath}`);
   console.log('页脚应显示 layout=notion-paper · built=...');
 
-  if (args.open && process.platform === 'darwin') {
-    spawn('open', [primaryHtml], { stdio: 'ignore', detached: true }).unref();
+  if (args.open) {
+    spawn('open', [reportUrl], { stdio: 'ignore', detached: true }).unref();
   }
 
   console.log('\nNote: this script only renders HTML. To regenerate summary content, run:');

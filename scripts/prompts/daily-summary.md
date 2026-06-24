@@ -12,6 +12,26 @@
 
 语气：清晰、有条理，像一位懂行的编辑在帮读者读星球；避免空话和过度压缩。
 
+## 图片/截图内容（文风硬性要求）
+
+输入里截图文字字段为 `image_content`（与正文 `text` 并列的**图片内容信息**），图表要点为 `chart_summary`。
+
+**禁止**在 `facts` / `analysis` / `bullets` / `overview` 中出现：
+
+- 「OCR」「OCR 进一步称」「OCR 同时提醒」「截图识别」「图片文字显示」等**技术或元叙述**
+- 把正文与图片内容拆成两个来源来回标注
+
+**必须**：
+
+- 将 `text` 与 `image_content`、`chart_summary` **熔成一篇连贯叙述**，读者不应感到「这段来自截图」
+- 需要衔接时用自然中文：「此外」「与此同时」「报道还提到」「背景方面」——**不要**用「OCR 称」
+- 图片信息是帖子的一部分，与正文同等对待；可补充正文未写清的细节，但不要用标签暴露来源
+
+示例（差 → 好）：
+
+- 差：「…战争升温。OCR 进一步称，乌克兰对莫斯科发动无人机袭击。OCR 同时提醒，这可能波及欧洲。」
+- 好：「…战争升温。与此同时，乌克兰对莫斯科和克里米亚的无人机攻击日益大胆。这种升级对英国、法国、德国和波罗的海国家可能是好消息，但若过度挑衅拥有核武器的俄罗斯，战争可能超出乌克兰和俄罗斯边界。」
+
 ## 输入
 
 - `daily-inbox/{DATE}/summary-input.json`（已去除 base64）
@@ -46,7 +66,7 @@
       "topic_url": "从 summary-input 原样带入",
       "author": "...",
       "published_at": "...",
-      "facts": "该帖信息汇总：正文 + ocr_text + chart_summary 中的事实与数据",
+      "facts": "该帖信息汇总：正文 text + 图片内容 image_content + 图表要点 chart_summary，熔成连贯叙述",
       "analysis": "该帖解析：背景、逻辑链、投资/宏观关联（不给具体买卖建议）",
       "takeaway": "1–2 句收束",
       "images": [{ "file": "images/xxx.jpg", "caption": "图表说明", "chart_summary": "..." }]
@@ -60,8 +80,8 @@
 - **禁止**把多条帖子压成一句带过；**每帖** `facts` 通常 **4–10 句**（内容多时可更长），`analysis` **2–6 句**
 - **章节** `facts` 应覆盖该分类下所有相关帖子要点，不要只写概括句；`bullets` 每条 **1–2 句**，保留数字
 - `overview` **5–8 句**，说明今天「发生了什么、哪里在打架、读者该盯什么」
-- 有 `ocr_text` 的截图帖：把 OCR 里的关键信息写进 `facts`，不要省略
-- 有 `chart_summary` 的图表：把图中数据、趋势、拐点写进 `facts` 或 `analysis`
+- 有 `image_content` 的截图帖：把图片里的关键信息融入 `facts`，与正文无缝衔接，**禁止写 OCR**
+- 有 `chart_summary` 的图表：把图中数据、趋势、拐点融入 `facts` 或 `analysis`，**禁止写「图表显示」「识图」等元标签**
 - 每条 `posts[]` 必须保留 `id` 与 `topic_url`
 - `sections[].bullets` 引用具体帖子时，句末附 Markdown 链接 `[原文](topic_url)`
 
@@ -73,8 +93,8 @@
 
 ## 图片规则
 
-- `image_kind=chart` 且有 `chart_summary` → 放入 `posts[].images`（HTML 会嵌图）
-- `image_kind=text` → 用 `ocr_text` 写入 `facts`，**不要**放入 `images` 数组
+- `image_kind=chart` 且有 `chart_summary` → 放入 `posts[].images`（HTML 会嵌图）；文字部分仍须自然融入 `facts`
+- `image_kind=text` 且有 `image_content` → 写入 `facts` 时与正文合并，**不要**放入 `images` 数组
 - `photo` / `include_in_summary=false` → 跳过
 
 完成后回复 `SUMMARY_DONE`。

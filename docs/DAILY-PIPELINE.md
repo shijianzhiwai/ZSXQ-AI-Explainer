@@ -36,10 +36,15 @@ node scripts/build-daily-pipeline.mjs
 ## 分步运行
 
 ```bash
-# 1. 启动 Inbox 桥接（推荐）
+# 1. 启动 Inbox 桥接（推荐，同时代理 HTML 日报 + WebSocket）
 node scripts/local-inbox-server.mjs
+# 默认每天 13:00 自动触发增量导出（等同 trigger-export.mjs）
+# 关闭定时：node scripts/local-inbox-server.mjs --no-schedule
+# 改时间：  node scripts/local-inbox-server.mjs --schedule 09:30
+# 浏览器打开 http://127.0.0.1:3921/latest（局域网可用本机 IP 访问）
+# 扩展会自动连接 ws://127.0.0.1:3921/ws
 
-# 2. 浏览器扩展 → 导出增量
+# 2. 浏览器扩展 → 导出增量（或远程触发，见下）
 
 # 3. OCR + 图表启发式分类
 bash scripts/ocr/setup-pyenv.sh   # 首次
@@ -76,14 +81,27 @@ Agent prompt 见 `scripts/prompts/daily-summary.md`：
 - manifest / summary-input 不含 base64
 - OCR 本机 PaddleOCR
 - agent 视觉阶段只打开 `needs_vision` 的本地 jpg
-- 总结 agent 只读 `text`、`ocr_text`、`chart_summary`
+- 总结 agent 只读 `text`、`image_content`（截图文字）、`chart_summary`
 
 ## 扩展 ↔ 本机
 
 | 方式 | 说明 |
 |------|------|
-| **本地 Inbox HTTP** | 扩展 POST → `local-inbox-server.mjs` 写仓库（首选） |
+| **本地 Inbox HTTP** | 扩展 POST → `local-inbox-server.mjs` 写仓库；同一服务代理 `summaries/*.html` 与图片 |
+| **WebSocket 远程触发** | 扩展连接 `ws://{inbox}/ws`；CLI `node scripts/trigger-export.mjs` → `POST /export/trigger` → 刷新星球页并静默导出增量 |
 | **Chrome Downloads** | Inbox 不可用时 fallback |
+
+### 远程触发导出
+
+```bash
+# 需：inbox 服务运行 + 扩展已加载且连上 WebSocket
+node scripts/trigger-export.mjs
+node scripts/trigger-export.mjs --no-reload    # 不刷新页面，直接导出
+node scripts/trigger-export.mjs --url http://192.168.1.10:3921
+
+# 查看连接状态
+curl http://127.0.0.1:3921/export/status
+```
 
 导出后在本机终端运行 `node scripts/build-daily-pipeline.mjs` 即可。
 
@@ -93,4 +111,4 @@ Agent prompt 见 `scripts/prompts/daily-summary.md`：
 
 ## 重载扩展
 
-`manifest.json` 当前 **0.8.3**，请在 `chrome://extensions` 重新加载。
+`manifest.json` 当前 **0.9.0**，请在 `chrome://extensions` 重新加载。

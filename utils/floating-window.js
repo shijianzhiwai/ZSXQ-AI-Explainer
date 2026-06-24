@@ -857,19 +857,25 @@ class FloatingWindow {
     }
   }
 
-  async handleDailyExport() {
+  async handleDailyExport(options = {}) {
+    const silent = options.silent === true;
     const { exportWindow, maxPosts } = await ZSXQDailyExport.getExportConfig();
     const dateStr = ZSXQDailyExport.todayDateString();
     const windowLabel = `${ZSXQDailyExport.formatWindowLabel(exportWindow)}，最多 ${maxPosts} 条`;
-    const dailyBtn = this.floatingWindow.querySelector('#daily-btn');
-    dailyBtn.disabled = true;
-    dailyBtn.textContent = '抓取中...';
+    const dailyBtn = this.floatingWindow?.querySelector('#daily-btn');
+
+    if (dailyBtn && !silent) {
+      dailyBtn.disabled = true;
+      dailyBtn.textContent = '抓取中...';
+    }
 
     try {
       const scrollResult = await this.autoScrollCaptureWindow(
         exportWindow.start,
         ({ inWindowCount, step }) => {
-          dailyBtn.textContent = `抓取 ${inWindowCount}/${maxPosts}…`;
+          if (dailyBtn && !silent) {
+            dailyBtn.textContent = `抓取 ${inWindowCount}/${maxPosts}…`;
+          }
           if (step % 5 === 0) {
             console.log(`[导出增量] 滚动第 ${step} 步，${inWindowCount}/${maxPosts} 帖（${windowLabel}）`);
           }
@@ -879,11 +885,12 @@ class FloatingWindow {
 
       const windowItems = ZSXQDailyExport.filterByWindow(this.contentArray, exportWindow.start, maxPosts);
       if (windowItems.length === 0) {
-        alert(`导出窗口内未找到帖子。\n范围：${windowLabel}\n已扫描 ${scrollResult.totalCaptured} 条 DOM 记录。`);
-        return;
+        const error = `导出窗口内未找到帖子。范围：${windowLabel}，已扫描 ${scrollResult.totalCaptured} 条 DOM 记录。`;
+        if (!silent) alert(`导出窗口内未找到帖子。\n范围：${windowLabel}\n已扫描 ${scrollResult.totalCaptured} 条 DOM 记录。`);
+        return { ok: false, error };
       }
 
-      dailyBtn.textContent = '导出中...';
+      if (dailyBtn && !silent) dailyBtn.textContent = '导出中...';
 
       const enriched = await ZSXQDailyExport.enrichPostsInWindow(
         this.contentArray,
@@ -919,14 +926,26 @@ class FloatingWindow {
       const msg = method === 'inbox'
         ? `增量内容已写入仓库 inbox（${manifest.post_count} 帖，${manifest.image_count} 图）`
         : `增量内容已下载到 daily-inbox/${dateStr}/（${manifest.post_count} 帖，${manifest.image_count} 图）`;
-      alert(`${msg}\n\n范围：${windowLabel}\n新截止点：${checkpointAfter || '—'}`);
+      if (!silent) {
+        alert(`${msg}\n\n范围：${windowLabel}\n新截止点：${checkpointAfter || '—'}`);
+      }
       console.log('Incremental export result:', response.result, manifest);
+      return {
+        ok: true,
+        manifest,
+        result: response.result,
+        checkpointAfter,
+        windowLabel
+      };
     } catch (error) {
       console.error('Incremental export failed:', error);
-      alert(`导出失败：${error.message}`);
+      if (!silent) alert(`导出失败：${error.message}`);
+      return { ok: false, error: error.message };
     } finally {
-      dailyBtn.disabled = false;
-      dailyBtn.textContent = '导出增量';
+      if (dailyBtn && !silent) {
+        dailyBtn.disabled = false;
+        dailyBtn.textContent = '导出增量';
+      }
     }
   }
 
@@ -1252,7 +1271,7 @@ function initZsxqExtractorApi() {
     }),
     exportJson: () => floatingWindow?.exportContent(),
     exportToday: () => floatingWindow?.handleDailyExport(),
-    exportIncremental: () => floatingWindow?.handleDailyExport(),
+    exportIncremental: (options) => floatingWindow?.handleDailyExport(options),
     autoScrollWindow: (windowStart) => floatingWindow?.autoScrollCaptureWindow(windowStart),
     autoScrollToday: () => floatingWindow?.handleDailyExport(),
     copyJson: () => floatingWindow?.handleCopy()
