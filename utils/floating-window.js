@@ -1384,6 +1384,11 @@ class FloatingWindow {
 
 // 创建并初始化悬浮窗口
 let floatingWindow = null;
+const FLOATING_WINDOW_HOST = 'wx.zsxq.com';
+
+function shouldShowFloatingWindow() {
+  return location.hostname === FLOATING_WINDOW_HOST;
+}
 
 function initZsxqExtractorApi() {
   const api = {
@@ -1417,13 +1422,16 @@ function initZsxqExtractorApi() {
   window.ZSXQExtractor = api;
 }
 
+function bootFloatingWindow() {
+  if (shouldShowFloatingWindow()) {
+    floatingWindow = new FloatingWindow();
+  }
+  initZsxqExtractorApi();
+}
+
 // 等待页面加载完成后初始化
 if (document.readyState === 'loading') {
-  document.addEventListener('DOMContentLoaded', () => {
-    floatingWindow = new FloatingWindow();
-    initZsxqExtractorApi();
-  });
+  document.addEventListener('DOMContentLoaded', bootFloatingWindow);
 } else {
-  floatingWindow = new FloatingWindow();
-  initZsxqExtractorApi();
+  bootFloatingWindow();
 }
