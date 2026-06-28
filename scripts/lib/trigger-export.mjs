@@ -15,8 +15,15 @@ export async function triggerExport(wsHub, options = {}) {
   const wait = options.wait !== false;
   const timeoutMs = Number(options.timeoutMs ?? options.timeout_ms) || DEFAULT_EXPORT_TRIGGER.timeoutMs;
   const tabUrl = options.tabUrl || options.tab_url || DEFAULT_GROUP_TAB_URL;
+  const since = options.since || null;
+  const bucketByDate = options.bucketByDate === true || options.bucket_by_date === true;
+  const maxPosts = Number(options.maxPosts ?? options.max_posts) || null;
 
-  const commandPromise = wsHub.dispatchCommand('refresh_and_export', { reload, tabUrl }, { timeoutMs });
+  const commandPromise = wsHub.dispatchCommand(
+    'refresh_and_export',
+    { reload, tabUrl, since, bucketByDate, maxPosts },
+    { timeoutMs }
+  );
 
   if (!wait) {
     commandPromise.catch(() => {});

@@ -45,7 +45,7 @@ const ZSXQContentExtractor = {
   },
 
   getPostContainer(contentElement) {
-    return contentElement?.closest?.('.talk-content-container') || null;
+    return contentElement?.closest?.('.talk-content-container, .answer-content-container') || null;
   },
 
   getPostScope(contentElement) {

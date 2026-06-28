@@ -201,7 +201,7 @@ async function findGroupTab(tabUrl) {
   return tabs[0] || null;
 }
 
-async function runRefreshAndExport({ reload = true, tabUrl } = {}) {
+async function runRefreshAndExport({ reload = true, tabUrl, since = null, bucketByDate = false, maxPosts = null } = {}) {
   const targetUrl = tabUrl || DEFAULT_GROUP_URL;
   let tab = await findGroupTab(targetUrl);
 
@@ -215,7 +215,10 @@ async function runRefreshAndExport({ reload = true, tabUrl } = {}) {
 
   const response = await chrome.tabs.sendMessage(tab.id, {
     action: 'runDailyExport',
-    silent: true
+    silent: true,
+    since,
+    bucketByDate,
+    maxPosts
   });
 
   if (!response) {
@@ -319,11 +322,11 @@ async function downloadDataUrlFile(filename, dataUrl) {
   });
 }
 
-async function postToInboxServer(inboxUrl, date, manifest, images) {
+async function postToInboxServer(inboxUrl, date, manifest, images, merge = false) {
   const response = await fetch(`${inboxUrl.replace(/\/$/, '')}/inbox/daily`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ date, manifest, images })
+    body: JSON.stringify({ date, manifest, images, merge })
   });
   if (!response.ok) {
     const body = await response.text().catch(() => '');
@@ -333,14 +336,14 @@ async function postToInboxServer(inboxUrl, date, manifest, images) {
 }
 
 
-async function saveDailyBundle({ date, manifest, images, mode = 'auto' }) {
+async function saveDailyBundle({ date, manifest, images, mode = 'auto', merge = false }) {
   const config = await getPipelineConfig();
   const prefix = `daily-inbox/${date}`;
   const manifestJson = JSON.stringify(manifest, null, 2);
 
   if (mode === 'inbox' || (mode === 'auto' && config.inboxServerUrl)) {
     try {
-      const result = await postToInboxServer(config.inboxServerUrl, date, manifest, images);
+      const result = await postToInboxServer(config.inboxServerUrl, date, manifest, images, merge);
       return { method: 'inbox', ...result };
     } catch (error) {
       if (mode === 'inbox') throw error;

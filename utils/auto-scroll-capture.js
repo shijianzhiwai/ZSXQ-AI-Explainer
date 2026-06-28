@@ -67,7 +67,18 @@ const ZSXQAutoScrollCapture = {
   },
 
   getOrderedPostElements() {
-    return [...document.querySelectorAll('app-topic .talk-content-container .content, .talk-content-container .content')];
+    // 普通帖在 .talk-content-container，提问/作业帖在 .answer-content-container；
+    // 按 app-topic 逐帖取一个内容元素，既兼容两种结构又天然去重保序
+    const topics = [...document.querySelectorAll('app-topic')];
+    if (topics.length) {
+      const out = [];
+      for (const topic of topics) {
+        const content = topic.querySelector('.talk-content-container .content, .answer-content-container .content');
+        if (content) out.push(content);
+      }
+      if (out.length) return out;
+    }
+    return [...document.querySelectorAll('.talk-content-container .content, .answer-content-container .content')];
   },
 
   getPostPublishedAt(contentEl) {
@@ -98,18 +109,42 @@ const ZSXQAutoScrollCapture = {
     return parsed.getTime() > windowStart.getTime() ? 'in_window' : 'before_window';
   },
 
-  scanDomWindow(elements, windowStart) {
+  // 置顶帖日期很旧但永远在顶部，会污染窗口边界判断，需识别并跳过
+  isStickyPost(scope) {
+    if (!scope) return false;
+    if (scope.querySelector?.('[class*="sticky"], [class*="digested"], [class*="is-top"], [class*="top-flag"]')) {
+      return true;
+    }
+    const header = scope.querySelector?.('.post-topic-head, .topic-head, [class*="topic-head"]');
+    const headerText = (header?.textContent || scope.textContent?.slice(0, 80) || '');
+    return /置顶/.test(headerText);
+  },
+
+  scanDomWindow(elements, windowStart, tailSize = 3) {
     let hasInWindow = false;
     let hasBefore = false;
     let known = 0;
 
+    // 记录非置顶帖的窗口分类（保序），用于底部边界判断
+    const orderedKinds = [];
     for (const el of elements) {
+      const scope = ZSXQContentExtractor.getPostScope(el);
+      if (this.isStickyPost(scope)) continue;
       const kind = this.classifyPostWindow(this.getPostPublishedAt(el), windowStart);
       if (kind === 'in_window') hasInWindow = true;
       if (kind === 'before_window') hasBefore = true;
-      if (kind !== 'unknown') known += 1;
+      if (kind !== 'unknown') {
+        known += 1;
+        orderedKinds.push(kind);
+      }
     }
-    return { hasInWindow, hasBefore, known };
+
+    // tailBefore：底部最后 tailSize 个已知分类的帖子是否全部 before_window
+    // 代表已加载到窗口边界之外（feed 为新→旧顺序）
+    const tail = orderedKinds.slice(-tailSize);
+    const tailBefore = tail.length > 0 && tail.every((kind) => kind === 'before_window');
+
+    return { hasInWindow, hasBefore, known, tailBefore };
   },
 
   getBottomPostKey() {
@@ -136,22 +171,24 @@ const ZSXQAutoScrollCapture = {
     if (scrollStuckRounds >= 3) return 'scroll_stuck';
     if (maxPosts > 0 && inWindowCount >= maxPosts) return 'max_posts';
 
-    if (passedBoundary && noNewInWindowRounds >= 1) return 'past_window';
-    if (inWindowCount > 0 && noNewInWindowRounds >= 3) return 'no_new_in_window';
-    if (domScan.hasInWindow && domScan.hasBefore && noNewInWindowRounds >= 1) return 'window_boundary';
-    if (domScan.hasBefore && !domScan.hasInWindow && inWindowCount > 0) return 'only_older_left';
+    // 真正越过窗口：底部已加载到 before_window，且连续多轮无新增窗口内帖
+    if (passedBoundary && noNewInWindowRounds >= 2) return 'past_window';
+    // DOM 当前只剩 before_window（且已抓到一些）：底部确认越界后停
+    if (domScan.tailBefore && !domScan.hasInWindow && inWindowCount > 0) return 'only_older_left';
+    // 兜底：抓到内容后长时间无新增
+    if (inWindowCount > 0 && noNewInWindowRounds >= 4) return 'no_new_in_window';
 
     return null;
   },
 
-  async captureInWindow(floatingWindow, { windowStart, maxPosts, onProgress } = {}) {
+  async captureInWindow(floatingWindow, { windowStart, maxPosts, onProgress, maxScrolls, maxMs } = {}) {
     if (!windowStart) throw new Error('windowStart is required');
 
     const postLimit = Number(maxPosts) || ZSXQDailyExport.DEFAULT_MAX_POSTS;
 
     const root = this.getScrollRoot();
-    const maxScrolls = 35;
-    const maxMs = 90000;
+    const scrollBudget = Number(maxScrolls) || 60;
+    const timeBudget = Number(maxMs) || 150000;
     const startedAt = Date.now();
 
     let scrollStuckRounds = 0;
@@ -162,7 +199,7 @@ const ZSXQAutoScrollCapture = {
     this.scrollToTop(root);
     await this.delay(700);
 
-    for (let step = 0; step < maxScrolls; step += 1) {
+    for (let step = 0; step < scrollBudget; step += 1) {
       const elements = this.getOrderedPostElements();
       const domScan = this.scanDomWindow(elements, windowStart);
 
@@ -195,7 +232,8 @@ const ZSXQAutoScrollCapture = {
         noNewInWindowRounds += 1;
       }
 
-      if (domScan.hasBefore) passedBoundary = true;
+      // 仅当底部已加载到窗口外（非置顶帖）才视为越界，避免顶部置顶旧帖误触发
+      if (domScan.tailBefore) passedBoundary = true;
 
       const inWindowCount = ZSXQDailyExport.filterByWindow(
         floatingWindow.contentArray,
@@ -215,9 +253,9 @@ const ZSXQAutoScrollCapture = {
 
       const stopReason = this.shouldStop({
         step,
-        maxScrolls,
+        maxScrolls: scrollBudget,
         elapsedMs,
-        maxMs,
+        maxMs: timeBudget,
         scrollStuckRounds,
         noNewInWindowRounds,
         inWindowCount,

@@ -20,7 +20,12 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
       for (let attempt = 0; attempt < 20; attempt++) {
         const exporter = window.zsxqExtractor?.exportIncremental;
         if (exporter) {
-          const result = await exporter({ silent: request.silent !== false });
+          const result = await exporter({
+            silent: request.silent !== false,
+            since: request.since || null,
+            bucketByDate: request.bucketByDate === true,
+            maxPosts: request.maxPosts || null
+          });
           sendResponse(result || { ok: false, error: 'empty export result' });
           return;
         }

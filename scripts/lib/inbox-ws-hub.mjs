@@ -118,6 +118,7 @@ export function attachInboxWebSocket(server, { path = '/ws' } = {}) {
       return {
         path,
         extension_clients: extensionClients.size,
+        extension_versions: [...extensionClients].map((client) => client.version || null),
         pending_commands: pendingCommands.size
       };
     }

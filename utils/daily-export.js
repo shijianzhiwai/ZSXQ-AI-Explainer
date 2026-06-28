@@ -165,6 +165,9 @@ const ZSXQDailyExport = {
     if (exportWindow.mode === 'incremental') {
       return `上次截止点之后（${exportWindow.checkpoint}）`;
     }
+    if (exportWindow.mode === 'manual') {
+      return `指定起点之后（${exportWindow.checkpoint || exportWindow.start?.toISOString?.() || '—'}）`;
+    }
     return `近 ${exportWindow.lookbackHours} 小时`;
   },
 
@@ -277,7 +280,7 @@ const ZSXQDailyExport = {
 
     for (const item of filtered) {
       const normalizedText = (item.text || '').replace(/\s+/g, ' ').trim();
-      const liveContent = [...document.querySelectorAll('.talk-content-container .content')].find(
+      const liveContent = [...document.querySelectorAll('.talk-content-container .content, .answer-content-container .content')].find(
         (el) => el.textContent.replace(/\s+/g, ' ').trim() === normalizedText
       );
       const live = liveContent ? ZSXQContentExtractor.extractPostRecord(liveContent) : null;
@@ -310,7 +313,7 @@ const ZSXQDailyExport = {
 
     for (const item of selected) {
       const normalizedText = (item.text || '').replace(/\s+/g, ' ').trim();
-      const liveContent = [...document.querySelectorAll('.talk-content-container .content')].find(
+      const liveContent = [...document.querySelectorAll('.talk-content-container .content, .answer-content-container .content')].find(
         (el) => el.textContent.replace(/\s+/g, ' ').trim() === normalizedText
       );
       const live = liveContent ? ZSXQContentExtractor.extractPostRecord(liveContent) : null;

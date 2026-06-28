@@ -108,7 +108,7 @@ curl http://127.0.0.1:3921/export/status
 用于测试「预览 + 全文链接」等待读长文，或快速试跑总结流水线，**不写入日期文件夹**：
 
 ```bash
-# 1. 启动 inbox 服务 + 重载扩展（0.9.2）
+# 1. 启动 inbox 服务 + 重载扩展（0.9.7）
 node scripts/local-inbox-server.mjs
 
 # 2. 浏览器登录知识星球（可先手动切到「精华」）
@@ -127,12 +127,35 @@ node scripts/build-daily-pipeline.mjs --slug debug-digests
 
 导出后在本机终端运行 `node scripts/build-daily-pipeline.mjs` 即可。
 
+### 补总结（漏抓 / 漏总结时回补）
+
+当某天只导出未总结，或滚动漏抓了一段时间窗，用交互式补总结命令：重新导出指定起点之后的帖子 → 按发布日期拆成每日 manifest（与既有日期合并，不覆盖）→ 逐日跑 OCR→总结→HTML。
+
+```bash
+# 需：inbox 服务运行 + 扩展已加载（>= 0.9.7）且连上 WebSocket
+node scripts/backfill-summaries.mjs
+```
+
+运行后交互二选一：
+
+- **A**：从「最新已有总结」的最后一条事件继续（自动读取该日期 manifest 的 `checkpoint_after`）。
+- **B**：强制从指定日期 00:00 开始（默认 `2026-06-27`，可输入修改）。
+
+跳过交互直接指定起点：
+
+```bash
+node scripts/backfill-summaries.mjs --since 2026-06-27        # 从该日 00:00
+node scripts/backfill-summaries.mjs --max-posts 300           # 调大单次上限（默认 200）
+```
+
+导出按帖子的**发布日期**写入对应 `daily-inbox/YYYY-MM-DD/`，每个被触及的日期都会重新生成 `summaries/YYYY-MM-DD.html`。
+
 ## 配置
 
 `scripts/.env.example` — 可选 `CURSOR_AGENT_MODEL`、超时等。
 
 ## 重载扩展
 
-`manifest.json` 当前 **0.9.2**，请在 `chrome://extensions` 重新加载。
+`manifest.json` 当前 **0.9.7**，请在 `chrome://extensions` 重新加载。
 
 **帖子类型**：`post_kind=article_link`（精华区「预览 + 全文链接」）会进入 HTML「待读长文」，不参与 agent 总结。

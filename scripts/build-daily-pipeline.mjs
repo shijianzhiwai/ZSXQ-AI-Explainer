@@ -29,6 +29,7 @@ async function findLatestInboxDate() {
   const dates = [];
   for (const entry of entries) {
     if (!entry.isDirectory() || entry.name.startsWith('.')) continue;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(entry.name)) continue;
     try {
       await fs.access(path.join(root, entry.name, 'manifest.json'));
       dates.push(entry.name);

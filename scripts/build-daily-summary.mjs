@@ -246,8 +246,18 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
     .block { box-shadow: none; }
     .post {
       position: relative;
-      padding-right: 72px;
       box-shadow: var(--shadow-soft);
+    }
+    .post-header {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 12px;
+      margin-bottom: 16px;
+    }
+    .post-header time { flex: 1 1 auto; }
+    .post-header .source-badge {
+      flex: 0 0 auto;
     }
     .posts-section {
       margin-top: 32px;
@@ -285,29 +295,26 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
       text-decoration: underline;
     }
     .source-badge {
-      position: absolute;
-      top: 20px;
-      right: 20px;
       z-index: 1;
       display: inline-flex;
       align-items: center;
-      justify-content: center;
-      min-width: 40px;
-      height: 32px;
-      padding: 4px 14px;
+      gap: 2px;
       font-family: var(--font-sans);
-      font-size: 16px;
+      font-size: 13px;
       font-weight: 500;
       line-height: 1.5;
-      color: var(--ink);
+      color: var(--ink-faint);
       text-decoration: none;
-      background: var(--surface);
-      border: 1px solid var(--hairline);
-      border-radius: var(--radius-md);
+      background: none;
+      border: none;
+    }
+    .source-badge::after {
+      content: "↗";
+      font-size: 12px;
     }
     .source-badge:hover {
-      color: var(--ink);
-      background: var(--canvas-soft);
+      color: var(--primary);
+      background: none;
       text-decoration: none;
     }
     time {
@@ -384,7 +391,7 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
     }
     .bullet-item {
       position: relative;
-      padding: 10px 52px 10px 16px;
+      padding: 10px 48px 10px 16px;
       margin-bottom: 8px;
       color: var(--ink-secondary);
       border-bottom: 1px solid var(--hairline);
@@ -398,12 +405,9 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
       font-weight: 700;
     }
     .bullet-item .source-badge {
-      top: 8px;
+      position: absolute;
+      top: 10px;
       right: 0;
-      height: 28px;
-      min-width: 36px;
-      padding: 4px 10px;
-      font-size: 14px;
     }
     .bullet-text { display: block; }
     .post-summary {
@@ -482,8 +486,7 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
       .hero-band { padding: 24px 16px 32px; }
       .wrap { padding: 24px 16px 32px; }
       .block, .post { padding: 20px 16px; }
-      .post { padding-right: 16px; padding-top: 48px; }
-      .source-badge { top: 12px; right: 12px; }
+      .bullet-item .source-badge { top: 10px; right: 0; }
       .legend { flex-direction: column; gap: 10px; }
     }
   </style>
@@ -604,6 +607,13 @@ function splitSourceLink(text) {
 function renderSourceBadge(url) {
   if (!url) return '';
   return `<a class="source-badge" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="打开知识星球原帖">原文</a>`;
+}
+
+function formatPostTime(raw) {
+  const s = String(raw ?? '').trim();
+  const m = s.match(/(\d{4})-(\d{2})-(\d{2})[T\s](\d{2}):(\d{2})/);
+  if (m) return `${m[2]}-${m[3]} ${m[4]}:${m[5]}`;
+  return s;
 }
 
 function renderBulletItem(bullet) {
@@ -738,9 +748,9 @@ function renderPostBlocks(posts, inboxRel, urlMaps) {
 
     return `
       <article class="post">
-        ${sourceBadge}
-        <header>
-          <time>${escapeHtml(post.published_at || '')}</time>
+        <header class="post-header">
+          <time>${escapeHtml(formatPostTime(post.published_at))}</time>
+          ${sourceBadge}
         </header>
         ${renderPostContent(post)}
         ${images}

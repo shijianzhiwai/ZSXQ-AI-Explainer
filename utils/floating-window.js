@@ -995,7 +995,18 @@ class FloatingWindow {
 
   async handleDailyExport(options = {}) {
     const silent = options.silent === true;
-    const { exportWindow, maxPosts } = await ZSXQDailyExport.getExportConfig();
+    const bucketByDate = options.bucketByDate === true;
+    const config = await ZSXQDailyExport.getExportConfig();
+
+    // since：覆盖窗口起点（补总结/手动指定）；maxPosts：覆盖上限
+    let exportWindow = config.exportWindow;
+    if (options.since) {
+      const start = new Date(options.since);
+      if (!Number.isNaN(start.getTime())) {
+        exportWindow = { start, mode: 'manual', checkpoint: options.since, lookbackHours: null };
+      }
+    }
+    const maxPosts = Number(options.maxPosts) || config.maxPosts;
     const dateStr = ZSXQDailyExport.todayDateString();
     const windowLabel = `${ZSXQDailyExport.formatWindowLabel(exportWindow)}，最多 ${maxPosts} 条`;
     const dailyBtn = this.floatingWindow?.querySelector('#daily-btn');
@@ -1034,6 +1045,11 @@ class FloatingWindow {
         maxPosts
       );
       const group = enriched[0]?.group || ZSXQContentExtractor.getGroupName();
+
+      if (bucketByDate) {
+        return await this.exportBucketedByDate(enriched, { group, exportWindow, maxPosts, windowLabel, silent });
+      }
+
       const manifest = ZSXQDailyExport.buildManifest(enriched, {
         date: dateStr,
         group,
@@ -1083,6 +1099,50 @@ class FloatingWindow {
         dailyBtn.textContent = '导出增量';
       }
     }
+  }
+
+  // 按发布日期分桶，逐日写入独立 manifest（补总结用）
+  async exportBucketedByDate(enriched, { group, exportWindow, maxPosts, windowLabel, silent }) {
+    const groups = new Map();
+    for (const post of enriched) {
+      const parsed = ZSXQDailyExport.parsePublishedDateLoose(post.published_at);
+      if (!parsed) continue;
+      const dateKey = ZSXQDailyExport.todayDateString(parsed);
+      if (!groups.has(dateKey)) groups.set(dateKey, []);
+      groups.get(dateKey).push(post);
+    }
+
+    const dates = [];
+    const sortedDates = [...groups.keys()].sort();
+    for (const date of sortedDates) {
+      const posts = groups.get(date);
+      const manifest = ZSXQDailyExport.buildManifest(posts, {
+        date,
+        group,
+        exportTime: new Date().toISOString(),
+        exportWindow,
+        maxPosts,
+        checkpointAfter: ZSXQDailyExport.maxPublishedAt(posts)?.toISOString() || null
+      });
+      const images = ZSXQDailyExport.collectImagePayloads(posts);
+
+      const response = await chrome.runtime.sendMessage({
+        action: 'saveDailyBundle',
+        payload: { date, manifest, images, mode: 'auto', merge: true }
+      });
+      if (!response?.ok) {
+        throw new Error(response?.error || `导出 ${date} 失败`);
+      }
+      dates.push({ date, post_count: manifest.post_count, image_count: manifest.image_count });
+      console.log(`[补总结] 已写入 ${date}：${manifest.post_count} 帖，${manifest.image_count} 图`);
+    }
+
+    const checkpointAfter = await ZSXQDailyExport.saveExportCheckpoint(enriched);
+    if (!silent) {
+      const summary = dates.map((d) => `${d.date}: ${d.post_count} 帖`).join('\n');
+      alert(`按日期分桶导出完成\n\n范围：${windowLabel}\n${summary}\n新截止点：${checkpointAfter || '—'}`);
+    }
+    return { ok: true, dates, checkpointAfter, windowLabel };
   }
 
   async handleExport() {
