@@ -7,7 +7,7 @@
  *
  * Prerequisites:
  *   - node scripts/local-inbox-server.mjs   (running, extension connected)
- *   - Chrome extension loaded (>= 0.9.7) and logged into wx.zsxq.com
+ *   - Chrome extension loaded (>= 0.9.8) and logged into wx.zsxq.com
  *
  * Usage:
  *   node scripts/backfill-summaries.mjs
@@ -25,7 +25,7 @@ import { runDailyPipeline } from './lib/run-daily-pipeline.mjs';
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
 const DATE_RE = /^\d{4}-\d{2}-\d{2}$/;
-const MIN_EXTENSION_VERSION = '0.9.7';
+const MIN_EXTENSION_VERSION = '0.9.8';
 
 function compareVersion(a, b) {
   const pa = String(a).split('.').map(Number);

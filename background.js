@@ -290,6 +290,28 @@ async function fetchImageAsDataUrl(url) {
   return `data:${mime};base64,${base64}`;
 }
 
+async function fetchArticleHtml(url) {
+  if (!/^https:\/\/articles\.zsxq\.com\//i.test(url || '')) {
+    throw new Error('not a zsxq article url');
+  }
+  const response = await fetch(url, {
+    method: 'GET',
+    credentials: 'include',
+    headers: { Referer: ZSXQ_REFERER }
+  });
+  if (!response.ok) {
+    throw new Error(`HTTP ${response.status}`);
+  }
+  if (/\/login/i.test(response.url || '')) {
+    throw new Error('redirected to login (not logged in)');
+  }
+  const html = await response.text();
+  if (html.includes('<app-root>')) {
+    throw new Error('got SPA shell instead of article content');
+  }
+  return html;
+}
+
 const DEFAULT_INBOX_URL = 'http://127.0.0.1:3921';
 
 async function getPipelineConfig() {
@@ -372,6 +394,13 @@ chrome.runtime.onMessage.addListener((request, sender, sendResponse) => {
     fetchImageAsDataUrl(request.url)
       .then((dataUrl) => sendResponse({ dataUrl }))
       .catch((error) => sendResponse({ error: error.message }));
+    return true;
+  }
+
+  if (request.action === 'fetchArticleHtml') {
+    fetchArticleHtml(request.url)
+      .then((html) => sendResponse({ ok: true, html }))
+      .catch((error) => sendResponse({ ok: false, error: error.message }));
     return true;
   }
 

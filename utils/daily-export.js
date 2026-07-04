@@ -220,6 +220,7 @@ const ZSXQDailyExport = {
         article_links: post.article_links || [],
         article_url: post.article_url || '',
         article_title: post.article_title || '',
+        article_content: post.article_content || '',
         include_in_summary: postIncludeInSummary,
         images
       });
@@ -251,7 +252,7 @@ const ZSXQDailyExport = {
       posts,
       llm_hints: {
         input_tokens: 'Use posts[].text; images: ocr_text (text) or chart_summary (chart). Skip include_in_summary=false.',
-        article_links: 'post_kind=article_link → reading list only; do not summarize preview text',
+        article_links: 'post_kind=article_link → reading list; summarize article_content (full text) when present, never the preview text',
         vision: 'Run enrich-manifest-images.mjs (OCR), then node scripts/build-daily-pipeline.mjs',
         output: 'Write summary sections as markdown; image refs as ![caption](relative-path).'
       }
@@ -304,6 +305,7 @@ const ZSXQDailyExport = {
       });
     }
 
+    await this.attachArticleContents(enriched);
     return enriched;
   },
 
@@ -337,7 +339,19 @@ const ZSXQDailyExport = {
       });
     }
 
+    await this.attachArticleContents(enriched);
     return enriched;
+  },
+
+  /** Fetch full text for article_link posts (zsxq long articles) via background. */
+  async attachArticleContents(posts) {
+    if (typeof window === 'undefined' || !window.ZSXQArticleContent) return posts;
+    try {
+      await window.ZSXQArticleContent.attachArticleContents(posts);
+    } catch (error) {
+      console.warn('[daily-export] attachArticleContents failed:', error.message);
+    }
+    return posts;
   },
 
   /** @deprecated */

@@ -13,6 +13,75 @@
 - 🤖 基于大模型提供智能解析
 - 💡 经济学专业视角的内容分析
 - 🔍 右键快捷操作，便捷实用
+- 📰 每日总结流水线：一键导出星球帖子，AI 生成结构化日报（含图表识别、长文摘要）
+- 📚 待读长文自动抓取全文并生成 AI 摘要，日报页面直接阅读要点
+- 🗂 本地日报站点：首页日期列表 + 报告页侧边栏目录/日期切换
+
+## 每日总结（Daily Pipeline）
+
+除右键解释外，本项目内置一条本地日报流水线：扩展导出星球帖子 → OCR/识图 → AI 总结 → 生成 HTML 日报，全程在本机完成。
+
+### 页面效果
+
+首页日期列表（`http://127.0.0.1:3921/`）：
+
+![日报首页](docs/daily-index.png)
+
+日报页面（左侧为章节目录 + 日期切换；「待读长文」区块自动附全文 AI 摘要）：
+
+![日报页面](docs/daily-report-2026-07-04.png)
+
+### 前置依赖
+
+| 依赖 | 用途 |
+|------|------|
+| Node.js 18+ | 运行全部 `scripts/*.mjs` 脚本 |
+| Chrome 扩展（本项目，>= 0.9.8） | 导出帖子/图片；抓取 `articles.zsxq.com` 长文全文（需登录知识星球） |
+| [Cursor CLI `agent`](https://cursor.com/cli) | AI 总结与图表识别，需 `agent` 在 PATH 且已登录（`runCursorAgent` 以 `--print` 无头模式调用） |
+
+Agent 模型可通过环境变量覆盖：
+
+- `CURSOR_SUMMARY_MODEL`：总结 agent，默认 `gpt-5.5-medium`
+- `CURSOR_VISION_MODEL`：识图 agent，默认 `auto`
+- `CURSOR_AGENT_BIN`：`agent` 可执行文件路径，默认取 PATH 中的 `agent`
+
+### 快速开始
+
+```bash
+# 1. 启动本地 inbox 服务（接收扩展导出、提供日报站点、每日 13:00 定时任务）
+node scripts/local-inbox-server.mjs
+
+# 2. Chrome 加载扩展并打开 wx.zsxq.com（扩展会自动通过 WebSocket 连上服务）
+
+# 3. 触发导出 + 跑全流程（也可以等定时任务自动跑）
+node scripts/trigger-export.mjs
+node scripts/build-daily-pipeline.mjs
+
+# 4. 浏览器打开 http://127.0.0.1:3921/ 查看日报
+```
+
+### 核心脚本
+
+| 脚本 | 作用 |
+|------|------|
+| `scripts/local-inbox-server.mjs` | 常驻服务：接收扩展导出（`POST /inbox/daily`）、日报站点（`/view/{date}`，含侧边栏日期切换）、扩展 WebSocket 桥、每日定时导出+总结 |
+| `scripts/trigger-export.mjs` | 让扩展执行一次增量导出（从上次 checkpoint 之后） |
+| `scripts/build-daily-pipeline.mjs --date 2026-07-04` | 对指定日期跑完整流水线：OCR → 识图 agent → 总结 agent → HTML；可用 `--skip-ocr` `--skip-vision` `--skip-summary` `--skip-html` 跳过步骤 |
+| `scripts/backfill-summaries.mjs --since 2026-07-04` | 补总结：从指定日期起重新导出（按日分桶），并对每一天跑完整流水线 |
+| `scripts/run-summary-agent.mjs --date 2026-07-04` | 单独重跑 AI 总结（生成 `summary-input.json` 并调用 agent 写 `summary.json`） |
+| `scripts/build-daily-summary.mjs --date 2026-07-04` | 单独重渲染 HTML（`summaries/{date}.html` + `daily-inbox/{date}/report.html`） |
+| `scripts/enrich-manifest-images.mjs` | 本地 OCR，标注图片类型（text/chart/photo） |
+| `scripts/run-vision-agent.mjs` | 识图 agent：为图表生成 `chart_summary` |
+
+### 待读长文摘要
+
+星球「预览 + 全文链接」帖（`post_kind=article_link`）的处理方式：
+
+1. 导出时扩展经 background 抓取 `articles.zsxq.com` 全文（带登录 cookie），写入 manifest 的 `article_content`
+2. 总结 agent 基于全文生成 3–5 句摘要，写入 `summary.json` 顶层 `reading_list[]`（长文不进入正文章节）
+3. 日报「待读长文」区块展示摘要 + 原文链接；抓取失败时回退为基于预览的 1–2 句提要
+
+数据流与更多细节见 [docs/DAILY-PIPELINE.md](docs/DAILY-PIPELINE.md)。
 
 ## 使用方法
 
@@ -45,6 +114,8 @@
 
 - [x] 自定义提示词
 - [x] 更多模型 (可以使用国内的代理聚合服务商，以获取更多模型支持)
+- [x] 每日总结流水线（导出 → OCR/识图 → AI 总结 → HTML 日报）
+- [x] 待读长文全文抓取 + AI 摘要
 - [ ] 同步到笔记软件（Logseq、Obsidian）
 
 ## 其他说明

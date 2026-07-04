@@ -35,17 +35,19 @@
 ## 输入
 
 - `daily-inbox/{DATE}/summary-input.json`（已去除 base64）
-- `reading_list[]`：**待读长文**（仅链接，见下）——**不要**写入 `sections` / `posts` 总结
+- `reading_list[]`：**待读长文**（见下）——**不要**写入 `sections` / `posts` 总结，单独输出 `reading_list[]` 摘要
 
 ## 待读长文（article_link）
 
-输入中的 `reading_list[]` 来自 `post_kind=article_link` 帖子（上方预览 + 下方 `link-of-topic` 全文链接）。
+输入中的 `reading_list[]` 来自 `post_kind=article_link` 帖子（上方预览 + 下方 `link-of-topic` 全文链接）。每条可能带有 `article_content`（抓取到的长文全文）与 `text`（帖子预览）。
 
-**硬性要求**：
+**要求**：
 
-- **禁止**总结 `reading_list` 中帖子的 `text` 预览
-- **禁止**把待读长文写进 `sections` 或 `posts[]`
-- HTML 会从 manifest 自动渲染「待读长文」区块；agent **无需**输出 reading_list
+- 为每条 reading_list 在 summary.json 顶层 `reading_list[]` 中写一段摘要：
+  - 有 `article_content`（全文）→ 基于全文写 **3–5 句**摘要，保留关键数据、机构名与核心结论
+  - 无 `article_content` → 基于预览 `text` 写 **1–2 句**提要，不要脑补预览之外的内容
+- **禁止**把待读长文写进 `sections` 或 `posts[]`；长文摘要只出现在 `reading_list[]`
+- 链接列表由 HTML 从 manifest 自动渲染，agent 只需输出 `id` / `topic_url` / `summary`
 
 ## 输出
 
@@ -82,6 +84,13 @@
       "takeaway": "1–2 句收束",
       "images": [{ "file": "images/xxx.jpg", "caption": "图表说明", "chart_summary": "..." }]
     }
+  ],
+  "reading_list": [
+    {
+      "id": "与输入 reading_list[] 一致",
+      "topic_url": "从 summary-input 原样带入",
+      "summary": "3–5 句长文摘要（有 article_content 时）；否则 1–2 句预览提要"
+    }
   ]
 }
 ```
@@ -107,6 +116,6 @@
 - `image_kind=chart` 且有 `chart_summary` → 放入 `posts[].images`（HTML 会嵌图）；文字部分仍须自然融入 `facts`
 - `image_kind=text` 且有 `image_content` → 写入 `facts` 时与正文合并，**不要**放入 `images` 数组
 - `photo` / `include_in_summary=false` → 跳过
-- `reading_list[]` / `post_kind=article_link` → **完全不总结**（见上）
+- `reading_list[]` / `post_kind=article_link` → **不进 sections/posts**；摘要写入顶层 `reading_list[]`（见上）
 
 完成后回复 `SUMMARY_DONE`。

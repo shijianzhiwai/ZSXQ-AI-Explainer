@@ -40,6 +40,15 @@ function mapLeanPost(post, manifest) {
   };
 }
 
+const MAX_ARTICLE_CONTENT_CHARS = 15000;
+
+function truncateArticleContent(content) {
+  const text = String(content || '').trim();
+  if (!text) return '';
+  if (text.length <= MAX_ARTICLE_CONTENT_CHARS) return text;
+  return `${text.slice(0, MAX_ARTICLE_CONTENT_CHARS)}\n…（正文过长，已截断）`;
+}
+
 function mapReadingListItem(post, manifest) {
   return {
     id: post.id,
@@ -48,7 +57,9 @@ function mapReadingListItem(post, manifest) {
     published_at: post.published_at || '',
     article_title: post.article_title || '',
     article_url: post.article_url || '',
-    article_links: post.article_links || []
+    article_links: post.article_links || [],
+    text: post.text || '',
+    article_content: truncateArticleContent(post.article_content)
   };
 }
 
@@ -76,8 +87,8 @@ export function buildLeanManifest(manifest) {
       topic_url: 'Include topic_url as source link in posts[] when citing original',
       text_images: 'Merge image_content into facts naturally; never say OCR in output; do not put in posts[].images',
       chart_images: 'Merge chart_summary into facts/analysis naturally; put chart file in posts[].images with caption',
-      article_links: 'reading_list[] are full-article links — do NOT summarize; HTML renders them separately',
-      skip: 'photo, include_in_summary=false, and all reading_list items'
+      article_links: 'reading_list[]: write a short digest into summary.json reading_list[] — use article_content (full text) when present, else 1-2 sentences from preview text; never merge into sections/posts',
+      skip: 'photo and include_in_summary=false images; reading_list items never go into sections/posts'
     }
   };
 }

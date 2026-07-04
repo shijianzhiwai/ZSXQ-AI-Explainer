@@ -86,7 +86,7 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
       inboxRel,
       urlMaps
     );
-  const readingListBlock = renderReadingListSection(readingList, urlMaps);
+  const readingListBlock = renderReadingListSection(readingList, urlMaps, summary);
   const readingLabel = readingList.length ? ` · ${readingList.length} 篇待读` : '';
 
   return `<!DOCTYPE html>
@@ -482,6 +482,15 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
       color: var(--ink-faint);
       font-weight: 400;
     }
+    .reading-summary {
+      margin: 10px 0 0;
+      padding: 12px 14px;
+      background: var(--canvas-soft);
+      border-radius: var(--radius-md);
+      color: var(--ink-secondary);
+      font-size: 14px;
+      line-height: 1.7;
+    }
     @media (max-width: 640px) {
       .hero-band { padding: 24px 16px 32px; }
       .wrap { padding: 24px 16px 32px; }
@@ -533,8 +542,14 @@ function linkKindLabel(url) {
   return '原文地址';
 }
 
-function renderReadingListSection(readingList, urlMaps) {
+function renderReadingListSection(readingList, urlMaps, summary) {
   if (!readingList?.length) return '';
+
+  const summaryById = new Map(
+    (summary?.reading_list || [])
+      .filter((entry) => entry?.id && entry?.summary)
+      .map((entry) => [String(entry.id), String(entry.summary).trim()])
+  );
 
   const items = readingList.map((item) => {
     const topicUrl = resolveTopicUrlForPost(item, urlMaps);
@@ -549,18 +564,28 @@ function renderReadingListSection(readingList, urlMaps) {
       return `<li><a href="${escapeHtml(link.url)}" target="_blank" rel="noopener">${escapeHtml(link.title || link.url)}</a><span class="link-kind">${escapeHtml(kind)}</span></li>`;
     }).join('');
 
+    const digest = summaryById.get(String(item.id));
+    const digestHtml = digest
+      ? `<p class="reading-summary">${escapeHtml(digest)}</p>`
+      : '';
+
     return `
       <article class="reading-item">
         ${sourceBadge}
         <time>${escapeHtml(item.published_at || '')}</time>
         <ul class="reading-links">${linksHtml}</ul>
+        ${digestHtml}
       </article>`;
   }).join('\n');
+
+  const note = summaryById.size
+    ? '以下长文附 AI 摘要，全文请点击链接阅读。'
+    : '以下帖子仅列出完整文章链接，不做内容总结，请自行阅读。';
 
   return `
     <section class="reading-list-block">
       <h2>待读长文</h2>
-      <p class="reading-note">以下帖子仅列出完整文章链接，不做内容总结，请自行阅读。</p>
+      <p class="reading-note">${note}</p>
       ${items}
     </section>`;
 }

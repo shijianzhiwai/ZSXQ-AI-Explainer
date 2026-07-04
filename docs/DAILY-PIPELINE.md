@@ -108,7 +108,7 @@ curl http://127.0.0.1:3921/export/status
 用于测试「预览 + 全文链接」等待读长文，或快速试跑总结流水线，**不写入日期文件夹**：
 
 ```bash
-# 1. 启动 inbox 服务 + 重载扩展（0.9.7）
+# 1. 启动 inbox 服务 + 重载扩展（0.9.8）
 node scripts/local-inbox-server.mjs
 
 # 2. 浏览器登录知识星球（可先手动切到「精华」）
@@ -156,6 +156,6 @@ node scripts/backfill-summaries.mjs --max-posts 300           # 调大单次上�
 
 ## 重载扩展
 
-`manifest.json` 当前 **0.9.7**，请在 `chrome://extensions` 重新加载。
+`manifest.json` 当前 **0.9.8**，请在 `chrome://extensions` 重新加载。
 
-**帖子类型**：`post_kind=article_link`（精华区「预览 + 全文链接」）会进入 HTML「待读长文」，不参与 agent 总结。
+**帖子类型**：`post_kind=article_link`（精华区「预览 + 全文链接」）会进入 HTML「待读长文」，不进入 sections/posts 总结。导出时扩展会经 background 抓取 `articles.zsxq.com` 长文全文（带登录 cookie），写入 manifest 的 `article_content`；summary agent 基于全文在 `summary.json` 顶层 `reading_list[]` 中生成 3–5 句摘要，HTML 在「待读长文」卡片中展示。无全文时回退为基于预览的 1–2 句提要。

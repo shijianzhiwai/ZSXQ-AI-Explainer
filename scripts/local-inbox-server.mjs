@@ -276,7 +276,12 @@ ${cards}
 </html>`;
 }
 
-function renderViewer(date) {
+function renderViewer(date, dates = []) {
+  const dateLinks = dates.map((d) => {
+    const cls = d === date ? ' class="current"' : '';
+    return `      <li><a${cls} href="/view/${d}">${d}</a></li>`;
+  }).join('\n');
+
   return `<!DOCTYPE html>
 <html lang="zh-CN">
 <head>
@@ -299,6 +304,12 @@ function renderViewer(date) {
     .toc-list a.active{background:rgba(0,117,222,.08);color:var(--primary);font-weight:600;}
     .toc-list a.lvl1{font-weight:700;color:var(--ink);}
     .toc-list a.lvl2{padding-left:14px;}
+    .toc-dates{flex:0 0 auto;max-height:38%;overflow-y:auto;border-top:1px solid var(--hairline);padding:10px 8px 16px;margin:0;list-style:none;}
+    .toc-dates-label{padding:12px 18px 0;font-size:12px;font-weight:600;color:var(--ink-faint);border-top:1px solid var(--hairline);}
+    .toc-dates-label + .toc-dates{border-top:0;padding-top:6px;}
+    .toc-dates a{display:block;padding:6px 10px;border-radius:var(--radius-md);font-size:13px;line-height:1.4;color:var(--ink-muted);text-decoration:none;}
+    .toc-dates a:hover{background:var(--canvas-soft);color:var(--ink);}
+    .toc-dates a.current{background:rgba(0,117,222,.08);color:var(--primary);font-weight:600;}
     .stage{position:relative;flex:1;min-width:0;}
     .frame{width:100%;height:100%;border:0;background:#fff;display:block;}
     .toggle{position:fixed;top:14px;right:14px;z-index:20;display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 13px;font-family:var(--font-sans);font-size:13px;font-weight:600;color:var(--ink-secondary);background:var(--surface);border:1px solid var(--hairline);border-radius:var(--radius-md);box-shadow:var(--shadow-soft);cursor:pointer;}
@@ -316,6 +327,10 @@ function renderViewer(date) {
       <div class="toc-title">${date}</div>
     </div>
     <ul class="toc-list" id="toc-list"></ul>
+    <div class="toc-dates-label">日期</div>
+    <ul class="toc-dates">
+${dateLinks}
+    </ul>
   </nav>
   <div class="stage">
     <iframe class="frame" id="frame" src="/summaries/${date}.html" title="${date} 日报"></iframe>
@@ -457,8 +472,9 @@ async function handleBrowse(root, req, res, port) {
       res.end('Not Found');
       return;
     }
+    const dates = await listSummaryDates(root);
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(renderViewer(date));
+    res.end(renderViewer(date, dates));
     return;
   }
 
