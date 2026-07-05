@@ -201,30 +201,78 @@ async function findGroupTab(tabUrl) {
   return tabs[0] || null;
 }
 
+// 后台/不可见标签页会被 Chrome 限流（Intensive Throttling），滚动抓取用的 setTimeout
+// 链在这种情况下会被严重拖慢，是导出超时的主因之一。导出前临时前台化目标标签页，
+// 结束后尽量恢复原先的活动标签页/窗口。
+async function captureFocusState() {
+  try {
+    const [activeTab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+    const win = await chrome.windows.getLastFocused({ populate: false }).catch(() => null);
+    return {
+      activeTabId: activeTab?.id ?? null,
+      focusedWindowId: win?.focused ? win.id : null
+    };
+  } catch {
+    return { activeTabId: null, focusedWindowId: null };
+  }
+}
+
+async function restoreFocusState(state) {
+  if (!state) return;
+  try {
+    if (state.focusedWindowId != null) {
+      await chrome.windows.update(state.focusedWindowId, { focused: true });
+    }
+    if (state.activeTabId != null) {
+      await chrome.tabs.update(state.activeTabId, { active: true });
+    }
+  } catch {
+    // 原标签页/窗口可能已关闭，尽力而为即可
+  }
+}
+
+async function activateTabForExport(tab) {
+  try {
+    await chrome.windows.update(tab.windowId, { focused: true });
+    await chrome.tabs.update(tab.id, { active: true });
+  } catch (error) {
+    console.warn('[export] activate tab failed:', error.message);
+  }
+}
+
 async function runRefreshAndExport({ reload = true, tabUrl, since = null, bucketByDate = false, maxPosts = null } = {}) {
   const targetUrl = tabUrl || DEFAULT_GROUP_URL;
   let tab = await findGroupTab(targetUrl);
+  const focusState = await captureFocusState();
 
-  if (!tab) {
-    tab = await chrome.tabs.create({ url: targetUrl, active: false });
-    await waitForTabLoad(tab.id);
-  } else if (reload) {
-    await chrome.tabs.reload(tab.id);
-    await waitForTabLoad(tab.id);
+  try {
+    if (!tab) {
+      tab = await chrome.tabs.create({ url: targetUrl, active: true });
+      await activateTabForExport(tab);
+      await waitForTabLoad(tab.id);
+    } else {
+      await activateTabForExport(tab);
+      if (reload) {
+        await chrome.tabs.reload(tab.id);
+        await waitForTabLoad(tab.id);
+      }
+    }
+
+    const response = await chrome.tabs.sendMessage(tab.id, {
+      action: 'runDailyExport',
+      silent: true,
+      since,
+      bucketByDate,
+      maxPosts
+    });
+
+    if (!response) {
+      throw new Error('content script did not respond');
+    }
+    return response;
+  } finally {
+    await restoreFocusState(focusState);
   }
-
-  const response = await chrome.tabs.sendMessage(tab.id, {
-    action: 'runDailyExport',
-    silent: true,
-    since,
-    bucketByDate,
-    maxPosts
-  });
-
-  if (!response) {
-    throw new Error('content script did not respond');
-  }
-  return response;
 }
 
 async function runDebugFeedExport({
@@ -236,27 +284,36 @@ async function runDebugFeedExport({
 } = {}) {
   const targetUrl = tabUrl || DEFAULT_GROUP_URL;
   let tab = await findGroupTab(targetUrl);
+  const focusState = await captureFocusState();
 
-  if (!tab) {
-    tab = await chrome.tabs.create({ url: targetUrl, active: false });
-    await waitForTabLoad(tab.id);
-  } else if (reload) {
-    await chrome.tabs.reload(tab.id);
-    await waitForTabLoad(tab.id);
+  try {
+    if (!tab) {
+      tab = await chrome.tabs.create({ url: targetUrl, active: true });
+      await activateTabForExport(tab);
+      await waitForTabLoad(tab.id);
+    } else {
+      await activateTabForExport(tab);
+      if (reload) {
+        await chrome.tabs.reload(tab.id);
+        await waitForTabLoad(tab.id);
+      }
+    }
+
+    const response = await chrome.tabs.sendMessage(tab.id, {
+      action: 'runDebugFeedExport',
+      silent: true,
+      slug,
+      count,
+      navigate_digests
+    });
+
+    if (!response) {
+      throw new Error('content script did not respond');
+    }
+    return response;
+  } finally {
+    await restoreFocusState(focusState);
   }
-
-  const response = await chrome.tabs.sendMessage(tab.id, {
-    action: 'runDebugFeedExport',
-    silent: true,
-    slug,
-    count,
-    navigate_digests
-  });
-
-  if (!response) {
-    throw new Error('content script did not respond');
-  }
-  return response;
 }
 
 chrome.storage.onChanged.addListener((changes, area) => {

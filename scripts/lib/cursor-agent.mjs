@@ -9,14 +9,34 @@ function resolveAgentBin() {
   return process.env.CURSOR_AGENT_BIN || 'agent';
 }
 
-/**
- * Run Cursor CLI agent in headless print mode.
- * Requires `agent` on PATH and an authenticated Cursor session.
- *
- * Pass `options.model` per task (summary vs vision). Omit model only when
- * you intentionally want the CLI default (composer-2.5-fast).
- */
-export function runCursorAgent(prompt, options = {}) {
+// Transient network/TLS failures while the `agent` CLI reaches Cursor's backend
+// (Wi-Fi blip, VPN reconnect, proxy hiccup, DNS glitch) — safe to retry as-is,
+// unlike real agent/model errors which would just fail the same way again.
+const RETRYABLE_ERROR_PATTERNS = [
+  /econnreset/i,
+  /etimedout/i,
+  /enotfound/i,
+  /eai_again/i,
+  /econnrefused/i,
+  /epipe/i,
+  /socket disconnected/i,
+  /secure tls connection/i,
+  /network socket disconnected/i,
+  /fetch failed/i,
+  /getaddrinfo/i,
+  /\[aborted\]/i
+];
+
+function isRetryableAgentError(message) {
+  const text = String(message || '');
+  return RETRYABLE_ERROR_PATTERNS.some((pattern) => pattern.test(text));
+}
+
+function delay(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+function runCursorAgentOnce(prompt, options = {}) {
   const {
     workspace = REPO_ROOT,
     model = '',
@@ -59,4 +79,41 @@ export function runCursorAgent(prompt, options = {}) {
       resolve({ stdout: stdout.trim(), stderr: stderr.trim() });
     });
   });
+}
+
+/**
+ * Run Cursor CLI agent in headless print mode.
+ * Requires `agent` on PATH and an authenticated Cursor session.
+ *
+ * Pass `options.model` per task (summary vs vision). Omit model only when
+ * you intentionally want the CLI default (composer-2.5-fast).
+ *
+ * Transient network/TLS errors (e.g. "socket disconnected before secure TLS
+ * connection was established") are retried a few times with backoff instead of
+ * failing the whole daily pipeline on a single blip. Real agent failures
+ * (bad prompt, model error, non-zero exit unrelated to networking) are not
+ * retried and surface immediately.
+ */
+export async function runCursorAgent(prompt, options = {}) {
+  const maxRetries = Number(options.maxRetries ?? process.env.CURSOR_AGENT_MAX_RETRIES ?? 2);
+  const retryDelayMs = Number(options.retryDelayMs ?? process.env.CURSOR_AGENT_RETRY_DELAY_MS ?? 5000);
+
+  let lastError;
+  for (let attempt = 0; attempt <= maxRetries; attempt += 1) {
+    try {
+      return await runCursorAgentOnce(prompt, options);
+    } catch (error) {
+      lastError = error;
+      const isLastAttempt = attempt === maxRetries;
+      if (isLastAttempt || !isRetryableAgentError(error.message)) {
+        throw error;
+      }
+      const backoffMs = retryDelayMs * (attempt + 1);
+      console.warn(
+        `[cursor-agent] transient network error, retrying (${attempt + 1}/${maxRetries}) in ${backoffMs}ms: ${error.message}`
+      );
+      await delay(backoffMs);
+    }
+  }
+  throw lastError;
 }

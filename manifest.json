@@ -1,7 +1,7 @@
 {
   "manifest_version": 3,
   "name": "ZSXQ AI Explainer",
-  "version": "0.9.8",
+  "version": "0.9.9",
   "description": "【南半球聊财经】在知识星球中右键解释内容",
   "permissions": [
     "contextMenus",
