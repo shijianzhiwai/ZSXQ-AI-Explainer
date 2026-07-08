@@ -225,12 +225,13 @@ async function listSummaryDates(root) {
 
 const VIEWER_PALETTE = `
     :root{
-      --primary:#0075de; --primary-active:#005bab;
-      --canvas:#ffffff; --canvas-soft:#f6f5f4; --surface:#ffffff;
-      --ink:rgba(0,0,0,.95); --ink-secondary:#31302e; --ink-muted:#615d59; --ink-faint:#a39e98;
-      --hairline:#e6e6e6; --band:#22314c;
+      color-scheme:dark;
+      --primary:#62aef0; --primary-active:#8cc6f7;
+      --canvas:#191817; --canvas-soft:#191817; --surface:#232220;
+      --ink:rgba(255,255,255,.95); --ink-secondary:rgba(255,255,255,.82); --ink-muted:rgba(255,255,255,.6); --ink-faint:rgba(255,255,255,.4);
+      --hairline:rgba(255,255,255,.12); --band:#213183;
       --radius-md:8px; --radius-lg:12px; --radius-full:9999px;
-      --shadow-soft:0 1px 2px rgba(0,0,0,.04), 0 4px 16px rgba(0,0,0,.05);
+      --shadow-soft:0 8px 24px rgba(0,0,0,.10), 0 16px 40px rgba(0,0,0,.16);
       --font-sans:'Inter',-apple-system,system-ui,'Segoe UI',Helvetica,Arial,sans-serif;
     }`;
 
@@ -547,7 +548,7 @@ function renderViewer(date, dates = []) {
     .toc-list{flex:1;overflow-y:auto;padding:10px 8px 28px;margin:0;list-style:none;}
     .toc-list a{display:block;padding:7px 10px;border-radius:var(--radius-md);font-size:14px;line-height:1.4;color:var(--ink-muted);text-decoration:none;cursor:pointer;}
     .toc-list a:hover{background:var(--canvas-soft);color:var(--ink);}
-    .toc-list a.active{background:rgba(0,117,222,.08);color:var(--primary);font-weight:600;}
+    .toc-list a.active{background:rgba(98,174,240,.16);color:var(--primary);font-weight:600;}
     .toc-list a.lvl1{font-weight:700;color:var(--ink);}
     .toc-list a.lvl2{padding-left:14px;}
     .toc-dates{flex:0 0 auto;max-height:38%;overflow-y:auto;border-top:1px solid var(--hairline);padding:10px 8px 16px;margin:0;list-style:none;}
@@ -555,18 +556,21 @@ function renderViewer(date, dates = []) {
     .toc-dates-label + .toc-dates{border-top:0;padding-top:6px;}
     .toc-dates a{display:block;padding:6px 10px;border-radius:var(--radius-md);font-size:13px;line-height:1.4;color:var(--ink-muted);text-decoration:none;}
     .toc-dates a:hover{background:var(--canvas-soft);color:var(--ink);}
-    .toc-dates a.current{background:rgba(0,117,222,.08);color:var(--primary);font-weight:600;}
+    .toc-dates a.current{background:rgba(98,174,240,.16);color:var(--primary);font-weight:600;}
     .stage{position:relative;flex:1;min-width:0;}
-    .frame{width:100%;height:100%;border:0;background:#fff;display:block;}
-    .toggle{position:fixed;top:14px;right:14px;z-index:20;display:inline-flex;align-items:center;gap:6px;height:34px;padding:0 13px;font-family:var(--font-sans);font-size:13px;font-weight:600;color:var(--ink-secondary);background:var(--surface);border:1px solid var(--hairline);border-radius:var(--radius-md);box-shadow:var(--shadow-soft);cursor:pointer;}
-    .toggle:hover{color:var(--primary);border-color:#cfe2f7;}
+    .frame{width:100%;height:100%;border:0;background:var(--canvas);display:block;}
+    .toggle{position:absolute;top:14px;right:16px;z-index:20;display:inline-flex;align-items:center;justify-content:center;width:36px;height:36px;padding:0;color:rgba(255,255,255,.75);background:rgba(25,24,23,.55);border:1px solid rgba(255,255,255,.14);border-radius:10px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px);cursor:pointer;transition:color .18s ease,background .18s ease,border-color .18s ease,transform .18s ease;}
+    .toggle:hover{color:var(--primary);border-color:rgba(98,174,240,.45);background:rgba(25,24,23,.75);transform:scale(1.06);}
+    .toggle:active{transform:scale(.96);}
+    .toggle svg{width:18px;height:18px;display:block;}
+    .toggle .pane{transition:opacity .18s ease;}
+    .toggle[aria-expanded="false"] .pane{opacity:0;}
     @media (max-width:720px){
       .toc{position:fixed;z-index:15;top:0;bottom:0;left:0;box-shadow:0 10px 30px rgba(0,0,0,.18);}
     }
   </style>
 </head>
 <body>
-  <button class="toggle" id="toggle" type="button">目录</button>
   <nav class="toc" id="toc">
     <div class="toc-head">
       <a class="toc-back" href="/">← 返回列表</a>
@@ -579,6 +583,15 @@ ${dateLinks}
     </ul>
   </nav>
   <div class="stage">
+    <button class="toggle" id="toggle" type="button" aria-expanded="true" aria-label="收起/展开目录" title="目录">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+        <rect x="3" y="4" width="18" height="16" rx="3"/>
+        <line x1="9.5" y1="4" x2="9.5" y2="20"/>
+        <line class="pane" x1="5.8" y1="8" x2="7.2" y2="8"/>
+        <line class="pane" x1="5.8" y1="11" x2="7.2" y2="11"/>
+        <line class="pane" x1="5.8" y1="14" x2="7.2" y2="14"/>
+      </svg>
+    </button>
     <iframe class="frame" id="frame" src="/summaries/${date}.html" title="${date} 日报"></iframe>
   </div>
   <script>
@@ -622,7 +635,10 @@ ${dateLinks}
       win.addEventListener('scroll',spy,{passive:true});spy();
     }
     frame.addEventListener('load',build);
-    toggle.addEventListener('click',function(){toc.classList.toggle('collapsed');});
+    toggle.addEventListener('click',function(){
+      var collapsed=toc.classList.toggle('collapsed');
+      toggle.setAttribute('aria-expanded',collapsed?'false':'true');
+    });
   })();
   </script>
 </body>

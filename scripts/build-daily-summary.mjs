@@ -103,19 +103,20 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
   <style>
     :root {
-      color-scheme: light;
-      --primary: #0075de;
-      --primary-active: #005bab;
+      /* Notion dark-mode palette (getdesign.md/notion preview-dark) */
+      color-scheme: dark;
+      --primary: #62aef0;
+      --primary-active: #8cc6f7;
       --secondary: #213183;
       --on-primary: #ffffff;
-      --canvas: #ffffff;
-      --canvas-soft: #f6f5f4;
-      --surface: #ffffff;
-      --ink: rgba(0, 0, 0, 0.95);
-      --ink-secondary: #31302e;
-      --ink-muted: #615d59;
-      --ink-faint: #a39e98;
-      --hairline: #e6e6e6;
+      --canvas: #191817;
+      --canvas-soft: #191817;
+      --surface: #232220;
+      --ink: rgba(255, 255, 255, 0.95);
+      --ink-secondary: rgba(255, 255, 255, 0.82);
+      --ink-muted: rgba(255, 255, 255, 0.6);
+      --ink-faint: rgba(255, 255, 255, 0.4);
+      --hairline: rgba(255, 255, 255, 0.12);
       --accent-sky: #62aef0;
       --accent-purple: #d6b6f6;
       --accent-pink: #ff64c8;
@@ -129,10 +130,8 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
       --radius-xl: 16px;
       --radius-full: 9999px;
       --shadow-soft:
-        rgba(0, 0, 0, 0.01) 0 0.175px 1.041px,
-        rgba(0, 0, 0, 0.02) 0 0.8px 2.925px,
-        rgba(0, 0, 0, 0.027) 0 2.025px 7.847px,
-        rgba(0, 0, 0, 0.04) 0 4px 18px;
+        rgba(0, 0, 0, 0.10) 0 8px 24px,
+        rgba(0, 0, 0, 0.16) 0 16px 40px;
     }
     *, *::before, *::after { box-sizing: border-box; }
     body {
@@ -341,6 +340,7 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
       border-radius: var(--radius-lg);
       border: 1px solid var(--hairline);
       display: block;
+      background: #ffffff; /* chart screenshots assume a light canvas */
     }
     .chart figcaption {
       color: var(--ink-muted);
