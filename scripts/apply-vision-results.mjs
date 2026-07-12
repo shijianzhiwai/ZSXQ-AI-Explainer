@@ -17,6 +17,7 @@ import {
   saveManifest
 } from './lib/manifest-vision.mjs';
 import { parseInboxFolderArg } from './lib/inbox-slug.mjs';
+import { parseJsonTolerant } from './lib/json-repair.mjs';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
@@ -39,7 +40,22 @@ async function main() {
     fs.readFile(args.input, 'utf8')
   ]);
 
-  const payload = JSON.parse(resultsRaw);
+  let parsed;
+  try {
+    parsed = parseJsonTolerant(resultsRaw);
+  } catch (error) {
+    throw new Error(`Invalid vision-results JSON (${args.input}): ${error.message}`);
+  }
+  if (parsed.didRepair) {
+    console.warn(
+      `Repaired invalid vision-results JSON (${parsed.steps.join(' → ')}): ${args.input}`
+    );
+    if (!args.dryRun) {
+      await fs.writeFile(args.input, `${parsed.repairedText}\n`, 'utf8');
+    }
+  }
+
+  const payload = parsed.value;
   const results = payload.results || payload;
   if (!Array.isArray(results)) {
     throw new Error('Expected results array in vision-results.json');
@@ -54,7 +70,9 @@ async function main() {
     before,
     applied: applied.length,
     errors,
-    remaining
+    remaining,
+    json_repaired: parsed.didRepair,
+    json_repair_steps: parsed.didRepair ? parsed.steps : undefined
   };
 
   if (!args.dryRun) {

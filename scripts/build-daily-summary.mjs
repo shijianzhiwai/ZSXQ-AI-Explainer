@@ -404,10 +404,18 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
       color: var(--ink-faint);
       font-weight: 700;
     }
-    .bullet-item .source-badge {
+    .bullet-item .source-badges {
       position: absolute;
       top: 10px;
       right: 0;
+      display: inline-flex;
+      flex-wrap: wrap;
+      justify-content: flex-end;
+      gap: 6px;
+      max-width: 40%;
+    }
+    .bullet-item .source-badge {
+      position: static;
     }
     .bullet-text { display: block; }
     .post-summary {
@@ -495,7 +503,7 @@ function buildHtml({ manifest, summary, date, inboxRel, builtAt, urlMaps }) {
       .hero-band { padding: 24px 16px 32px; }
       .wrap { padding: 24px 16px 32px; }
       .block, .post { padding: 20px 16px; }
-      .bullet-item .source-badge { top: 10px; right: 0; }
+      .bullet-item .source-badges { top: 10px; right: 0; }
       .legend { flex-direction: column; gap: 10px; }
     }
   </style>
@@ -622,16 +630,28 @@ function renderFooterLine(manifest, summary, builtAt) {
   return `${main}<span class="build-stamp"> · layout=notion-paper · built=${escapeHtml(builtAt)}</span>`;
 }
 
-function splitSourceLink(text) {
-  const s = String(text ?? '');
-  const match = s.match(/\s*\[原文\]\((https?:\/\/[^\s)]+)\)\s*$/);
-  if (!match) return { body: s, url: '' };
-  return { body: s.slice(0, match.index).trim(), url: match[1] };
+/** Peel all trailing `[原文](url)` markers so none fall through to markdownLite blue links. */
+function splitSourceLinks(text) {
+  let body = String(text ?? '');
+  const urls = [];
+  const re = /\s*\[原文\]\((https?:\/\/[^\s)]+)\)\s*$/;
+  while (true) {
+    const match = body.match(re);
+    if (!match) break;
+    urls.unshift(match[1]);
+    body = body.slice(0, match.index).trimEnd();
+  }
+  return { body: body.trim(), urls };
 }
 
 function renderSourceBadge(url) {
   if (!url) return '';
   return `<a class="source-badge" href="${escapeHtml(url)}" target="_blank" rel="noopener noreferrer" title="打开知识星球原帖">原文</a>`;
+}
+
+function renderSourceBadges(urls) {
+  if (!urls?.length) return '';
+  return `<span class="source-badges">${urls.map(renderSourceBadge).join('')}</span>`;
 }
 
 function formatPostTime(raw) {
@@ -642,8 +662,8 @@ function formatPostTime(raw) {
 }
 
 function renderBulletItem(bullet) {
-  const { body, url } = splitSourceLink(bullet);
-  return `<li class="bullet-item">${renderSourceBadge(url)}<span class="bullet-text">${markdownLite(body)}</span></li>`;
+  const { body, urls } = splitSourceLinks(bullet);
+  return `<li class="bullet-item">${renderSourceBadges(urls)}<span class="bullet-text">${markdownLite(body)}</span></li>`;
 }
 
 function sanitizeAgentProse(text) {
