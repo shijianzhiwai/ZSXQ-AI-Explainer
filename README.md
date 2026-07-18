@@ -42,7 +42,7 @@
 
 Agent 模型可通过环境变量覆盖：
 
-- `CURSOR_SUMMARY_MODEL`：总结 agent，默认 `gpt-5.5-medium`
+- `CURSOR_SUMMARY_MODEL`：总结 agent，默认 `cursor-grok-4.5-high-fast`
 - `CURSOR_VISION_MODEL`：识图 agent，默认 `auto`
 - `CURSOR_AGENT_BIN`：`agent` 可执行文件路径，默认取 PATH 中的 `agent`
 - `CURSOR_AGENT_MAX_RETRIES` / `CURSOR_AGENT_RETRY_DELAY_MS`：`agent` 调用遇到 TLS/网络类瞬时错误时的重试次数（默认 2）与首次重试延迟（默认 5000ms，按次数递增），非网络类错误不重试

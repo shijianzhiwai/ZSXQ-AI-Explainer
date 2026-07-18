@@ -33,7 +33,7 @@ async function main() {
 
   if (args.dryRun) return;
 
-  const summaryModel = process.env.CURSOR_SUMMARY_MODEL || 'gpt-5.5-medium';
+  const summaryModel = process.env.CURSOR_SUMMARY_MODEL || 'cursor-grok-4.5-high-fast';
   console.log(`Summary agent model: ${summaryModel}`);
 
   const promptTemplate = await readPromptTemplate();

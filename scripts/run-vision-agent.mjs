@@ -95,6 +95,10 @@ Output file: daily-inbox/${folder}/vision-results.json`;
     const visionModel = process.env.CURSOR_VISION_MODEL || 'auto';
     console.log(`Vision agent model: ${visionModel}`);
 
+    // Each round produces a complete payload. Remove the previous round's file
+    // so the agent cannot accidentally prepend/append a second top-level object.
+    await fs.rm(visionResultsPath, { force: true });
+
     const { stdout } = await runCursorAgent(prompt, { model: visionModel });
     console.log(stdout.slice(-500));
 
