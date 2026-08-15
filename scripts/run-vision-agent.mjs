@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Run Cursor CLI agent for chart vision batches.
+ * Run Cursor Agent SDK for chart vision batches.
  *
  * Usage:
  *   node scripts/run-vision-agent.mjs --date 2026-06-23
@@ -92,7 +92,7 @@ DATE=${folder}
 Batch file: daily-inbox/${folder}/vision-batch.json
 Output file: daily-inbox/${folder}/vision-results.json`;
 
-    const visionModel = process.env.CURSOR_VISION_MODEL || 'auto';
+    const visionModel = process.env.CURSOR_VISION_MODEL || 'composer-2.5';
     console.log(`Vision agent model: ${visionModel}`);
 
     // Each round produces a complete payload. Remove the previous round's file

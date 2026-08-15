@@ -1,3 +1,4 @@
+import './load-env.mjs';
 import { execFile, spawn } from 'node:child_process';
 import { promisify } from 'node:util';
 import fs from 'node:fs';

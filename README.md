@@ -36,16 +36,16 @@
 
 | 依赖 | 用途 |
 |------|------|
-| Node.js 18+ | 运行全部 `scripts/*.mjs` 脚本 |
+| Node.js 22.13+ | 运行全部 `scripts/*.mjs` 脚本；Cursor SDK 要求此版本 |
 | Chrome 扩展（本项目，>= 0.9.8） | 导出帖子/图片；抓取 `articles.zsxq.com` 长文全文（需登录知识星球） |
-| [Cursor CLI `agent`](https://cursor.com/cli) | AI 总结与图表识别，需 `agent` 在 PATH 且已登录（`runCursorAgent` 以 `--print` 无头模式调用） |
+| [Cursor Agent SDK](https://cursor.com/docs/sdk/typescript) (`@cursor/sdk`) | AI 总结与图表识别；需 `CURSOR_API_KEY`（Dashboard → API Keys） |
 
 Agent 模型可通过环境变量覆盖：
 
-- `CURSOR_SUMMARY_MODEL`：总结 agent，默认 `cursor-grok-4.5-high-fast`
-- `CURSOR_VISION_MODEL`：识图 agent，默认 `auto`
-- `CURSOR_AGENT_BIN`：`agent` 可执行文件路径，默认取 PATH 中的 `agent`
-- `CURSOR_AGENT_MAX_RETRIES` / `CURSOR_AGENT_RETRY_DELAY_MS`：`agent` 调用遇到 TLS/网络类瞬时错误时的重试次数（默认 2）与首次重试延迟（默认 5000ms，按次数递增），非网络类错误不重试
+- `CURSOR_API_KEY`：Cursor API key（必填）。写入 gitignore 的 `scripts/.env`，或导出为环境变量；不复用 `agent login`
+- `CURSOR_SUMMARY_MODEL`：总结 agent，默认 `grok-4.5`
+- `CURSOR_VISION_MODEL`：识图 agent，默认 `composer-2.5`
+- `CURSOR_AGENT_MAX_RETRIES` / `CURSOR_AGENT_RETRY_DELAY_MS`：SDK 判定可重试（含瞬时网络）时的重试次数（默认 2）与首次重试延迟（默认 5000ms，按次数递增）
 
 ### 快速开始
 

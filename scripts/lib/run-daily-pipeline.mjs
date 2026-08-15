@@ -1,6 +1,7 @@
 /**
  * Run OCR → vision → summary → HTML for one inbox folder (YYYY-MM-DD or slug).
  */
+import './load-env.mjs';
 import fs from 'node:fs/promises';
 import path from 'node:path';
 import { spawn } from 'node:child_process';

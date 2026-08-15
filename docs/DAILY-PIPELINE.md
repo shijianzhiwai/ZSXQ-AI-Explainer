@@ -1,6 +1,6 @@
 # 每日星球总结流水线（本地）
 
-从知识星球抓取 → 本机 OCR → **Cursor Agent CLI** 识图/总结 → HTML 日报。
+从知识星球抓取 → 本机 OCR → **Cursor Agent SDK** 识图/总结 → HTML 日报。
 
 ## 架构
 
@@ -13,8 +13,8 @@ flowchart LR
   D --> E[build-daily-pipeline]
   D2 --> E
   E --> F[enrich OCR]
-  F --> G[agent 图表识别]
-  G --> H[agent 写总结]
+  F --> G[SDK 图表识别]
+  G --> H[SDK 写总结]
   H --> I[build-daily-summary]
   I --> J[summaries/*.html]
 ```
@@ -31,7 +31,7 @@ node scripts/build-daily-pipeline.mjs --date 2026-06-23
 node scripts/build-daily-pipeline.mjs
 ```
 
-**前置条件**：本机已安装 Cursor CLI（`agent` 命令可用且已登录）。
+**前置条件**：`npm install` 后设置 `CURSOR_API_KEY`（Cursor Dashboard → API Keys）。Node.js ≥ 22.13。
 
 ## 分步运行
 
@@ -152,7 +152,7 @@ node scripts/backfill-summaries.mjs --max-posts 300           # 调大单次上�
 
 ## 配置
 
-`scripts/.env.example` — 可选 `CURSOR_AGENT_MODEL`、超时等。
+`scripts/.env`（gitignore，从 `scripts/.env.example` 复制）会在流水线启动时加载。已有的进程环境变量优先。总结/识图走 `@cursor/sdk` 本地 Agent。
 
 ## 重载扩展
 

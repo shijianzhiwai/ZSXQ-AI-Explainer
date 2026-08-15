@@ -6,3 +6,5 @@ summaries/*.html
 *.DS_Store
 .venv/
 node_modules/
+.env
+scripts/.env

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Run Cursor CLI agent to write summary.json from lean manifest input.
+ * Run Cursor Agent SDK to write summary.json from lean manifest input.
  *
  * Usage:
  *   node scripts/run-summary-agent.mjs --date 2026-06-23
@@ -33,7 +33,7 @@ async function main() {
 
   if (args.dryRun) return;
 
-  const summaryModel = process.env.CURSOR_SUMMARY_MODEL || 'cursor-grok-4.5-high-fast';
+  const summaryModel = process.env.CURSOR_SUMMARY_MODEL || 'grok-4.5';
   console.log(`Summary agent model: ${summaryModel}`);
 
   const promptTemplate = await readPromptTemplate();

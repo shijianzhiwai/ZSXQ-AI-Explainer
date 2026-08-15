@@ -26,6 +26,7 @@
  *   --no-schedule                 disable
  *   --schedule 13:00              override time (HH:MM)
  */
+import './lib/load-env.mjs';
 import http from 'node:http';
 import fs from 'node:fs/promises';
 import os from 'node:os';

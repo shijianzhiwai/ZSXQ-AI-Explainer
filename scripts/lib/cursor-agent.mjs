@@ -1,98 +1,138 @@
-import { spawn } from 'node:child_process';
+import './load-env.mjs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
+import { Agent, CursorAgentError } from '@cursor/sdk';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 export const REPO_ROOT = path.resolve(__dirname, '../..');
 
-function resolveAgentBin() {
-  return process.env.CURSOR_AGENT_BIN || 'agent';
-}
-
-// Transient network/TLS failures while the `agent` CLI reaches Cursor's backend
-// (Wi-Fi blip, VPN reconnect, proxy hiccup, DNS glitch) — safe to retry as-is,
-// unlike real agent/model errors which would just fail the same way again.
-const RETRYABLE_ERROR_PATTERNS = [
-  /econnreset/i,
-  /etimedout/i,
-  /enotfound/i,
-  /eai_again/i,
-  /econnrefused/i,
-  /epipe/i,
-  /socket disconnected/i,
-  /secure tls connection/i,
-  /network socket disconnected/i,
-  /fetch failed/i,
-  /getaddrinfo/i,
-  /\[aborted\]/i
-];
-
-function isRetryableAgentError(message) {
-  const text = String(message || '');
-  return RETRYABLE_ERROR_PATTERNS.some((pattern) => pattern.test(text));
-}
+const DEFAULT_MODEL = 'composer-2.5';
 
 function delay(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
-function runCursorAgentOnce(prompt, options = {}) {
-  const {
-    workspace = REPO_ROOT,
-    model = '',
-    force = true,
-    timeoutMs = Number(process.env.CURSOR_AGENT_TIMEOUT_MS || 900000)
-  } = options;
+function resolveApiKey() {
+  return String(process.env.CURSOR_API_KEY || '').trim();
+}
 
-  const bin = resolveAgentBin();
-  const args = ['--print', '--trust', '--workspace', workspace];
-  if (force) args.push('--force');
-  if (model) args.push('--model', model);
-  args.push('-p', prompt);
+function resolveModelId(model) {
+  return String(model || '').trim() || DEFAULT_MODEL;
+}
 
-  return new Promise((resolve, reject) => {
-    const child = spawn(bin, args, {
-      cwd: workspace,
-      env: { ...process.env },
-      stdio: ['ignore', 'pipe', 'pipe']
-    });
+function statusValue(status) {
+  if (status != null && typeof status === 'object' && 'value' in status) {
+    return String(status.value).toLowerCase();
+  }
+  return String(status || '').toLowerCase();
+}
 
-    let stdout = '';
-    let stderr = '';
-    const timer = setTimeout(() => {
-      child.kill('SIGTERM');
-      reject(new Error(`Cursor agent timed out after ${timeoutMs}ms`));
-    }, timeoutMs);
+function isFinishedStatus(status) {
+  return ['finished', 'success', 'completed', 'ok'].includes(statusValue(status));
+}
 
-    child.stdout.on('data', (chunk) => { stdout += chunk; });
-    child.stderr.on('data', (chunk) => { stderr += chunk; });
-    child.on('error', (error) => {
-      clearTimeout(timer);
-      reject(error);
-    });
-    child.on('close', (code) => {
-      clearTimeout(timer);
-      if (code !== 0) {
-        reject(new Error(stderr.trim() || stdout.trim() || `agent exited with code ${code}`));
-        return;
-      }
-      resolve({ stdout: stdout.trim(), stderr: stderr.trim() });
-    });
-  });
+function resultStdout(result) {
+  const text = result?.result;
+  return text == null ? '' : String(text).trim();
+}
+
+function isRetryableAgentError(error) {
+  if (error instanceof CursorAgentError && error.isRetryable) return true;
+  const text = String(error?.message || '');
+  return /econnreset|etimedout|enotfound|eai_again|econnrefused|epipe|socket disconnected|secure tls connection|network socket disconnected|fetch failed|getaddrinfo|\[aborted\]/i.test(text);
+}
+
+async function disposeAgent(agent) {
+  if (!agent) return;
+  if (typeof agent[Symbol.asyncDispose] === 'function') {
+    await agent[Symbol.asyncDispose]();
+    return;
+  }
+  if (typeof agent.close === 'function') {
+    await agent.close();
+  }
+}
+
+async function waitWithTimeout(run, timeoutMs) {
+  let timedOut = false;
+  const timer = setTimeout(() => {
+    timedOut = true;
+    if (typeof run.cancel === 'function') {
+      Promise.resolve(run.cancel()).catch(() => {});
+    }
+  }, timeoutMs);
+
+  try {
+    const result = await run.wait();
+    if (timedOut || statusValue(result.status) === 'cancelled') {
+      throw new Error(`Cursor agent timed out after ${timeoutMs}ms`);
+    }
+    return result;
+  } finally {
+    clearTimeout(timer);
+  }
 }
 
 /**
- * Run Cursor CLI agent in headless print mode.
- * Requires `agent` on PATH and an authenticated Cursor session.
+ * One-shot local Cursor SDK agent.
+ * Requires CURSOR_API_KEY. Local runtime writes files in `workspace`.
+ */
+async function runCursorAgentOnce(prompt, options = {}) {
+  const {
+    workspace = REPO_ROOT,
+    model = '',
+    timeoutMs = Number(process.env.CURSOR_AGENT_TIMEOUT_MS || 900000)
+  } = options;
+
+  const apiKey = resolveApiKey();
+  if (!apiKey) {
+    throw new Error('missing CURSOR_API_KEY');
+  }
+
+  const modelId = resolveModelId(model);
+  const cwd = path.resolve(workspace);
+  let agent;
+
+  try {
+    agent = await Agent.create({
+      apiKey,
+      model: { id: modelId },
+      local: { cwd }
+    });
+
+    const run = await agent.send(prompt);
+    console.log(`[cursor-sdk] run_id=${run.id} agent_id=${run.agentId} model=${modelId}`);
+
+    const result = await waitWithTimeout(run, timeoutMs);
+    if (!isFinishedStatus(result.status)) {
+      const detail = result.error?.message || `run status=${result.status}`;
+      throw new Error(detail);
+    }
+
+    return {
+      stdout: resultStdout(result),
+      stderr: '',
+      runId: result.id,
+      status: result.status
+    };
+  } catch (error) {
+    if (error instanceof CursorAgentError) {
+      const wrapped = new Error(`startup: ${error.message}`);
+      wrapped.cause = error;
+      wrapped.isRetryable = Boolean(error.isRetryable);
+      throw wrapped;
+    }
+    throw error;
+  } finally {
+    await disposeAgent(agent);
+  }
+}
+
+/**
+ * Run a one-shot local Cursor agent via @cursor/sdk.
  *
- * Pass `options.model` per task (summary vs vision). Omit model only when
- * you intentionally want the CLI default (composer-2.5-fast).
- *
- * Transient network/TLS errors (e.g. "socket disconnected before secure TLS
- * connection was established") are retried a few times with backoff instead of
- * failing the whole daily pipeline on a single blip. Real agent failures
- * (bad prompt, model error, non-zero exit unrelated to networking) are not
- * retried and surface immediately.
+ * Pass `options.model` per task (summary vs vision). Empty model falls back to composer-2.5.
+ * Startup/network failures marked retryable by the SDK are retried with backoff.
  */
 export async function runCursorAgent(prompt, options = {}) {
   const maxRetries = Number(options.maxRetries ?? process.env.CURSOR_AGENT_MAX_RETRIES ?? 2);
@@ -104,13 +144,14 @@ export async function runCursorAgent(prompt, options = {}) {
       return await runCursorAgentOnce(prompt, options);
     } catch (error) {
       lastError = error;
+      const retryable = error.isRetryable === true || isRetryableAgentError(error);
       const isLastAttempt = attempt === maxRetries;
-      if (isLastAttempt || !isRetryableAgentError(error.message)) {
+      if (isLastAttempt || !retryable) {
         throw error;
       }
       const backoffMs = retryDelayMs * (attempt + 1);
       console.warn(
-        `[cursor-agent] transient network error, retrying (${attempt + 1}/${maxRetries}) in ${backoffMs}ms: ${error.message}`
+        `[cursor-sdk] retryable error, retrying (${attempt + 1}/${maxRetries}) in ${backoffMs}ms: ${error.message}`
       );
       await delay(backoffMs);
     }

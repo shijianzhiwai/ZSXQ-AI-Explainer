@@ -2,7 +2,11 @@
   "name": "zsxq-ai-explainer",
   "private": true,
   "type": "module",
+  "engines": {
+    "node": ">=22.13.0"
+  },
   "dependencies": {
+    "@cursor/sdk": "^1.0.28",
     "ws": "^8.18.3"
   }
 }
