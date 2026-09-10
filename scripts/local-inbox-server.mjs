@@ -20,11 +20,13 @@
  * POST /export/debug               export top N digests posts to daily-inbox/{slug}/
  * GET  /export/status             websocket client status
  *
- * Scheduled job (default on): daily at 13:00 local time
- *   1. incremental export (WebSocket → extension)
- *   2. build-daily-pipeline (OCR → vision → summary → HTML)
- *   --no-schedule                 disable
- *   --schedule 13:00              override time (HH:MM)
+ * Scheduled jobs (default on):
+ *   13:00  incremental export → build-daily-pipeline (OCR → vision → summary → HTML)
+ *   03:00  full zip of daily-inbox/ + summaries/ to iCloud Drive (keep 2 snapshots)
+ *   --no-schedule                 disable export + pipeline
+ *   --schedule 13:00              override export time (HH:MM)
+ *   --no-backup                   disable iCloud backup
+ *   --backup-schedule 03:00       override backup time (HH:MM)
  */
 import './lib/load-env.mjs';
 import http from 'node:http';
@@ -37,6 +39,7 @@ import { triggerExport, triggerDebugExport } from './lib/trigger-export.mjs';
 import { parseScheduleTime, scheduleDailyAt } from './lib/daily-schedule.mjs';
 import { todayDateString } from './lib/inbox-slug.mjs';
 import { runDailyPipeline } from './lib/run-daily-pipeline.mjs';
+import { backupDailyArtifacts, resolveBackupConfig } from './lib/icloud-backup.mjs';
 
 export const DEFAULT_PORT = 3921;
 
@@ -62,7 +65,9 @@ function parseArgs(argv) {
     host: '0.0.0.0',
     root: path.resolve(__dirname, '..'),
     schedule: true,
-    scheduleTime: '13:00'
+    scheduleTime: '13:00',
+    backup: true,
+    backupTime: '03:00'
   };
   for (let i = 2; i < argv.length; i++) {
     if (argv[i] === '--port') args.port = Number(argv[++i]);
@@ -70,6 +75,8 @@ function parseArgs(argv) {
     if (argv[i] === '--root') args.root = path.resolve(argv[++i]);
     if (argv[i] === '--no-schedule') args.schedule = false;
     if (argv[i] === '--schedule') args.scheduleTime = argv[++i];
+    if (argv[i] === '--no-backup') args.backup = false;
+    if (argv[i] === '--backup-schedule') args.backupTime = argv[++i];
   }
   return args;
 }
@@ -745,7 +752,7 @@ async function handleBrowse(root, req, res, port) {
   await serveFile(root, url.pathname, res, req.method);
 }
 
-const { port, host, root, schedule, scheduleTime } = parseArgs(process.argv);
+const { port, host, root, schedule, scheduleTime, backup, backupTime } = parseArgs(process.argv);
 
 let wsHub;
 
@@ -844,6 +851,30 @@ function startScheduledExport() {
   }, { label: 'daily export + pipeline' });
 }
 
+function startScheduledBackup() {
+  if (!backup) return;
+  const backupConfig = resolveBackupConfig();
+  if (!backupConfig.enabled) {
+    console.log('Backup: disabled (ICLOUD_BACKUP=0)');
+    return;
+  }
+  const { hour, minute } = parseScheduleTime(backupTime, 3, 0);
+  scheduleDailyAt(hour, minute, async () => {
+    const date = todayDateString();
+    console.log(`[backup] packing daily-inbox/ + summaries/ → ${backupConfig.dir}`);
+    const result = await backupDailyArtifacts({ root, date });
+    if (result.skipped) {
+      console.warn(`[backup] skipped ${date}: ${result.reason}`);
+      return;
+    }
+    const mb = (result.bytes / (1024 * 1024)).toFixed(1);
+    console.log(`[backup] wrote ${result.destPath} (${mb} MB)`);
+    if (result.pruned.length) {
+      console.log(`[backup] pruned ${result.pruned.join(', ')}`);
+    }
+  }, { label: 'daily iCloud backup' });
+}
+
 function startServer() {
   server.listen(port, host, () => {
     console.log(`ZSXQ inbox server listening on http://${host}:${port}`);
@@ -859,8 +890,19 @@ function startServer() {
     if (schedule) {
       console.log(`Schedule: daily export + pipeline at ${scheduleTime} (local), --no-schedule to disable`);
     }
+    if (backup) {
+      const backupConfig = resolveBackupConfig();
+      if (backupConfig.enabled) {
+        console.log(`Backup:   daily full snapshot at ${backupTime} → ${backupConfig.dir}, --no-backup to disable`);
+      } else {
+        console.log('Backup:   disabled (ICLOUD_BACKUP=0)');
+      }
+    } else {
+      console.log('Backup:   disabled (--no-backup)');
+    }
     console.log(`Index:    http://127.0.0.1:${port}/`);
     startScheduledExport();
+    startScheduledBackup();
   });
 }
 

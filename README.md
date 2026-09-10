@@ -43,14 +43,14 @@
 Agent 模型可通过环境变量覆盖：
 
 - `CURSOR_API_KEY`：Cursor API key（必填）。写入 gitignore 的 `scripts/.env`，或导出为环境变量；不复用 `agent login`
-- `CURSOR_SUMMARY_MODEL`：总结 agent，默认 `grok-4.5`
+- `CURSOR_SUMMARY_MODEL`：总结 agent，默认 `grok-4.6`
 - `CURSOR_VISION_MODEL`：识图 agent，默认 `composer-2.5`
 - `CURSOR_AGENT_MAX_RETRIES` / `CURSOR_AGENT_RETRY_DELAY_MS`：SDK 判定可重试（含瞬时网络）时的重试次数（默认 2）与首次重试延迟（默认 5000ms，按次数递增）
 
 ### 快速开始
 
 ```bash
-# 1. 启动本地 inbox 服务（接收扩展导出、提供日报站点、每日 13:00 定时任务）
+# 1. 启动本地 inbox 服务（接收扩展导出、提供日报站点、每日 13:00 流水线、03:00 全量备份 daily-inbox/summaries 到 iCloud）
 node scripts/local-inbox-server.mjs
 
 # 2. Chrome 加载扩展并打开 wx.zsxq.com（扩展会自动通过 WebSocket 连上服务）
@@ -66,7 +66,7 @@ node scripts/build-daily-pipeline.mjs
 
 | 脚本 | 作用 |
 |------|------|
-| `scripts/local-inbox-server.mjs` | 常驻服务：接收扩展导出（`POST /inbox/daily`）、日报站点（`/view/{date}`，含侧边栏日期切换）、扩展 WebSocket 桥、每日定时导出+总结 |
+| `scripts/local-inbox-server.mjs` | 常驻服务：接收扩展导出（`POST /inbox/daily`）、日报站点（`/view/{date}`，含侧边栏日期切换）、扩展 WebSocket 桥、每日 13:00 导出+总结、03:00 把整个 `daily-inbox/` + `summaries/` 打 zip 全量备份到本机 iCloud（默认只留 2 份快照） |
 | `scripts/trigger-export.mjs` | 让扩展执行一次增量导出（从上次 checkpoint 之后） |
 | `scripts/build-daily-pipeline.mjs --date 2026-07-04` | 对指定日期跑完整流水线：OCR → 识图 agent → 总结 agent → HTML；可用 `--skip-ocr` `--skip-vision` `--skip-summary` `--skip-html` 跳过步骤 |
 | `scripts/backfill-summaries.mjs --since 2026-07-04` | 补总结：从指定日期起重新导出（按日分桶），并对每一天跑完整流水线 |
@@ -74,6 +74,7 @@ node scripts/build-daily-pipeline.mjs
 | `scripts/build-daily-summary.mjs --date 2026-07-04` | 单独重渲染 HTML（`summaries/{date}.html` + `daily-inbox/{date}/report.html`） |
 | `scripts/enrich-manifest-images.mjs` | 本地 OCR，标注图片类型（text/chart/photo） |
 | `scripts/run-vision-agent.mjs` | 识图 agent：为图表生成 `chart_summary` |
+| `scripts/backup-daily.mjs` | 立刻把整个 `daily-inbox/` + `summaries/` 打 zip 写到 iCloud（`--date` 只用来命名文件）；常驻服务每天 03:00 会自动跑 |
 
 ### 待读长文摘要
 

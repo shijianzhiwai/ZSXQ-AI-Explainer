@@ -39,8 +39,14 @@ node scripts/build-daily-pipeline.mjs
 # 1. 启动 Inbox 桥接（推荐，同时代理 HTML 日报 + WebSocket）
 node scripts/local-inbox-server.mjs
 # 默认每天 13:00 自动跑完整链路（增量导出 → OCR → 总结 → HTML）
-# 关闭定时：node scripts/local-inbox-server.mjs --no-schedule
-# 改时间：  node scripts/local-inbox-server.mjs --schedule 09:30
+# 默认每天 03:00 把整个 daily-inbox/ + summaries/ 打 zip 全量备份到本机 iCloud Drive
+#   ~/Library/Mobile Documents/com~apple~CloudDocs/ZSXQ-AI-Explainer/zsxq-daily-YYYY-MM-DD.zip
+#   只保留最近 2 份快照
+# 关闭流水线定时：node scripts/local-inbox-server.mjs --no-schedule
+# 改流水线时间：  node scripts/local-inbox-server.mjs --schedule 09:30
+# 关闭备份：      node scripts/local-inbox-server.mjs --no-backup
+# 改备份时间：    node scripts/local-inbox-server.mjs --backup-schedule 04:00
+# 立刻全量备份：  node scripts/backup-daily.mjs
 # 浏览器打开 http://127.0.0.1:3921/latest（局域网可用本机 IP 访问）
 # 扩展会自动连接 ws://127.0.0.1:3921/ws
 
