@@ -33,7 +33,7 @@ async function main() {
 
   if (args.dryRun) return;
 
-  const summaryModel = process.env.CURSOR_SUMMARY_MODEL || 'grok-4.5';
+  const summaryModel = process.env.CURSOR_SUMMARY_MODEL || 'grok-4.6';
   console.log(`Summary agent model: ${summaryModel}`);
 
   const promptTemplate = await readPromptTemplate();
