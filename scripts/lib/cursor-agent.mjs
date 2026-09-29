@@ -39,7 +39,7 @@ function resultStdout(result) {
 function isRetryableAgentError(error) {
   if (error instanceof CursorAgentError && error.isRetryable) return true;
   const text = String(error?.message || '');
-  return /econnreset|etimedout|enotfound|eai_again|econnrefused|epipe|socket disconnected|secure tls connection|network socket disconnected|fetch failed|getaddrinfo|\[aborted\]/i.test(text);
+  return /econnreset|etimedout|enotfound|eai_again|econnrefused|epipe|socket disconnected|secure tls connection|network socket disconnected|fetch failed|getaddrinfo|\[aborted\]|connection stalled|stalled repeatedly/i.test(text);
 }
 
 async function disposeAgent(agent) {
