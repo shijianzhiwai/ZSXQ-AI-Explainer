@@ -2,6 +2,7 @@ daily-inbox/**/images/
 daily-inbox/*/
 !daily-inbox/.gitkeep
 summaries/*.html
+summaries/*.epub
 .python-version
 *.DS_Store
 .venv/

@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 /**
- * Local daily pipeline: OCR → Cursor agent vision → Cursor agent summary → HTML
+ * Local daily pipeline: OCR → Cursor agent vision → Cursor agent summary → HTML → EPUB
  *
  * Usage:
  *   node scripts/build-daily-pipeline.mjs
@@ -48,6 +48,7 @@ function parseArgs(argv) {
     skipVision: false,
     skipSummary: false,
     skipHtml: false,
+    skipEpub: false,
     reclassifyOnly: false
   };
   for (let i = 2; i < argv.length; i++) {
@@ -56,6 +57,7 @@ function parseArgs(argv) {
     if (argv[i] === '--skip-vision') args.skipVision = true;
     if (argv[i] === '--skip-summary') args.skipSummary = true;
     if (argv[i] === '--skip-html') args.skipHtml = true;
+    if (argv[i] === '--skip-epub') args.skipEpub = true;
     if (argv[i] === '--reclassify-only') args.reclassifyOnly = true;
   }
   return args;
@@ -71,12 +73,14 @@ async function main() {
     skipVision: args.skipVision,
     skipSummary: args.skipSummary,
     skipHtml: args.skipHtml,
+    skipEpub: args.skipEpub,
     reclassifyOnly: args.reclassifyOnly
   });
 
   console.log(`\nDone → ${result.reportUrl}`);
   console.log(`     → ${result.htmlPath}`);
   console.log(`     → ${result.reportPath}`);
+  if (result.epubPath) console.log(`     → ${result.epubPath}`);
 }
 
 main().catch((error) => {

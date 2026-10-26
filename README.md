@@ -72,6 +72,7 @@ node scripts/build-daily-pipeline.mjs
 | `scripts/backfill-summaries.mjs --since 2026-07-04` | 补总结：从指定日期起重新导出（按日分桶），并对每一天跑完整流水线 |
 | `scripts/run-summary-agent.mjs --date 2026-07-04` | 单独重跑 AI 总结（生成 `summary-input.json` 并调用 agent 写 `summary.json`） |
 | `scripts/build-daily-summary.mjs --date 2026-07-04` | 单独重渲染 HTML（`summaries/{date}.html` + `daily-inbox/{date}/report.html`） |
+| `scripts/build-daily-epub.mjs --date 2026-07-04` | 把当日总结做成适合墨水屏的 EPUB（`summaries/{date}.epub`）。`--days 7` 合成一本，`--each` 逐日导出 |
 | `scripts/enrich-manifest-images.mjs` | 本地 OCR，标注图片类型（text/chart/photo） |
 | `scripts/run-vision-agent.mjs` | 识图 agent：为图表生成 `chart_summary` |
 | `scripts/backup-daily.mjs` | 立刻把整个 `daily-inbox/` + `summaries/` 打 zip 写到 iCloud（`--date` 只用来命名文件）；常驻服务每天 03:00 会自动跑 |
@@ -83,6 +84,13 @@ node scripts/build-daily-pipeline.mjs
 1. 导出时扩展经 background 抓取 `articles.zsxq.com` 全文（带登录 cookie），写入 manifest 的 `article_content`
 2. 总结 agent 基于全文生成 3–5 句摘要，写入 `summary.json` 顶层 `reading_list[]`（长文不进入正文章节）
 3. 日报「待读长文」区块展示摘要 + 原文链接；抓取失败时回退为基于预览的 1–2 句提要
+
+日报页面右上角目录旁可下载当日 EPUB，拷到墨水屏后用设备自带字体阅读。多日合集：
+
+```bash
+node scripts/build-daily-epub.mjs --days 7
+node scripts/build-daily-epub.mjs --each
+```
 
 数据流与更多细节见 [docs/DAILY-PIPELINE.md](docs/DAILY-PIPELINE.md)。
 

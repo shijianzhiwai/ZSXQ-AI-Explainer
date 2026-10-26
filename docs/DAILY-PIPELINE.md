@@ -1,6 +1,6 @@
 # 每日星球总结流水线（本地）
 
-从知识星球抓取 → 本机 OCR → **Cursor Agent SDK** 识图/总结 → HTML 日报。
+从知识星球抓取 → 本机 OCR → **Cursor Agent SDK** 识图/总结 → HTML 日报，并导出适合墨水屏的 EPUB。
 
 ## 架构
 
@@ -16,7 +16,9 @@ flowchart LR
   F --> G[SDK 图表识别]
   G --> H[SDK 写总结]
   H --> I[build-daily-summary]
+  H --> K[build-daily-epub]
   I --> J[summaries/*.html]
+  K --> L[summaries/*.epub]
 ```
 
 ## 一键运行（推荐）
@@ -24,7 +26,7 @@ flowchart LR
 扩展导出到 `daily-inbox/YYYY-MM-DD/` 后：
 
 ```bash
-# 全流程：OCR → 图表 agent → 总结 agent → HTML
+# 全流程：OCR → 图表 agent → 总结 agent → HTML → EPUB
 node scripts/build-daily-pipeline.mjs --date 2026-06-23
 
 # 自动选 daily-inbox 里最新日期
@@ -38,7 +40,7 @@ node scripts/build-daily-pipeline.mjs
 ```bash
 # 1. 启动 Inbox 桥接（推荐，同时代理 HTML 日报 + WebSocket）
 node scripts/local-inbox-server.mjs
-# 默认每天 13:00 自动跑完整链路（增量导出 → OCR → 总结 → HTML）
+# 默认每天 13:00 自动跑完整链路（增量导出 → OCR → 总结 → HTML → EPUB）
 # 默认每天 03:00 把整个 daily-inbox/ + summaries/ 打 zip 全量备份到本机 iCloud Drive
 #   ~/Library/Mobile Documents/com~apple~CloudDocs/ZSXQ-AI-Explainer/zsxq-daily-YYYY-MM-DD.zip
 #   只保留最近 2 份快照
@@ -64,6 +66,11 @@ node scripts/run-summary-agent.mjs --date 2026-06-23
 
 # 6. 拼 HTML
 node scripts/build-daily-summary.mjs --date 2026-06-23
+
+# 7. 墨水屏 EPUB（可重排，不内嵌字体；图表压到长边 1400px）
+node scripts/build-daily-epub.mjs --date 2026-06-23
+node scripts/build-daily-epub.mjs --days 7          # 最近 7 天合成一本，从新到旧
+node scripts/build-daily-epub.mjs --each            # 每个有总结的日期各一本
 ```
 
 ## 图片处理分工

@@ -1,5 +1,5 @@
 /**
- * Run OCR → vision → summary → HTML for one inbox folder (YYYY-MM-DD or slug).
+ * Run OCR → vision → summary → HTML → EPUB for one inbox folder (YYYY-MM-DD or slug).
  */
 import './load-env.mjs';
 import fs from 'node:fs/promises';
@@ -40,6 +40,7 @@ export async function runDailyPipeline(folder, options = {}) {
     skipVision = false,
     skipSummary = false,
     skipHtml = false,
+    skipEpub = false,
     reclassifyOnly = false
   } = options;
 
@@ -85,6 +86,26 @@ export async function runDailyPipeline(folder, options = {}) {
     console.log('Skip HTML');
   }
 
+  let epubPath = '';
+  if (!skipEpub) {
+    const summaryPath = path.join(REPO_ROOT, 'daily-inbox', folder, 'summary.json');
+    let hasSummary = true;
+    try {
+      await fs.access(summaryPath);
+    } catch (error) {
+      if (error.code !== 'ENOENT') throw error;
+      hasSummary = false;
+    }
+    if (!hasSummary) {
+      console.log('Skip EPUB — no summary.json');
+    } else {
+      await runNode('build-daily-epub.mjs', inboxCliArgs(folder));
+      epubPath = path.join(REPO_ROOT, 'summaries', `${folder}.epub`);
+    }
+  } else {
+    console.log('Skip EPUB');
+  }
+
   const htmlPath = path.join(REPO_ROOT, 'summaries', `${folder}.html`);
   const reportPath = path.join(REPO_ROOT, 'daily-inbox', folder, 'report.html');
   const { summaryReportUrl, DEFAULT_PORT } = await import('../local-inbox-server.mjs');
@@ -93,6 +114,7 @@ export async function runDailyPipeline(folder, options = {}) {
     folder,
     htmlPath,
     reportPath,
+    epubPath,
     reportUrl: summaryReportUrl(folder, DEFAULT_PORT)
   };
 }
