@@ -14,7 +14,6 @@
  * GET  /                          index of available reports
  * GET  /latest                    redirect to newest summary
  * GET  /summaries/YYYY-MM-DD.html daily report (images via ../daily-inbox/...)
- * GET  /summaries/YYYY-MM-DD.epub e-ink EPUB (attachment)
  * GET  /daily-inbox/...           manifest, images, report.html
  * WS   /ws                        extension bridge (refresh_and_export)
  * POST /export/trigger            dispatch export command to extension
@@ -22,7 +21,7 @@
  * GET  /export/status             websocket client status
  *
  * Scheduled jobs (default on):
- *   13:00  incremental export → build-daily-pipeline (OCR → vision → summary → HTML → EPUB)
+ *   13:00  incremental export → build-daily-pipeline (OCR → vision → summary → HTML)
  *   03:00  full zip of daily-inbox/ + summaries/ to iCloud Drive (keep 2 snapshots)
  *   --no-schedule                 disable export + pipeline
  *   --schedule 13:00              override export time (HH:MM)
@@ -532,7 +531,7 @@ ${body}
 </html>`;
 }
 
-function renderViewer(date, dates = [], { hasEpub = false } = {}) {
+function renderViewer(date, dates = []) {
   const dateLinks = dates.map((d) => {
     const cls = d === date ? ' class="current"' : '';
     return `      <li><a${cls} href="/view/${d}">${d}</a></li>`;
@@ -555,8 +554,6 @@ function renderViewer(date, dates = [], { hasEpub = false } = {}) {
     .toc-back{display:inline-flex;align-items:center;gap:4px;font-size:13px;color:var(--ink-faint);text-decoration:none;}
     .toc-back:hover{color:var(--primary);}
     .toc-title{margin-top:10px;font-size:18px;font-weight:700;color:var(--ink);}
-    .toc-epub{display:inline-block;margin-top:8px;font-size:13px;font-weight:600;color:var(--primary);text-decoration:none;}
-    .toc-epub:hover{text-decoration:underline;}
     .toc-list{flex:1;overflow-y:auto;padding:10px 8px 28px;margin:0;list-style:none;}
     .toc-list a{display:block;padding:7px 10px;border-radius:var(--radius-md);font-size:14px;line-height:1.4;color:var(--ink-muted);text-decoration:none;cursor:pointer;}
     .toc-list a:hover{background:var(--canvas-soft);color:var(--ink);}
@@ -587,7 +584,6 @@ function renderViewer(date, dates = [], { hasEpub = false } = {}) {
     <div class="toc-head">
       <a class="toc-back" href="/">← 返回列表</a>
       <div class="toc-title">${date}</div>
-      ${hasEpub ? `<a class="toc-epub" href="/summaries/${date}.epub">下载 EPUB</a>` : ''}
     </div>
     <ul class="toc-list" id="toc-list"></ul>
     <div class="toc-dates-label">日期</div>
@@ -692,13 +688,8 @@ async function serveFile(root, urlPath, res, method = 'GET') {
   const body = method === 'HEAD' ? null : await fs.readFile(abs);
   const headers = {
     'Content-Type': type,
-    'Cache-Control': ext === '.html' || ext === '.epub'
-      ? 'no-cache, no-store, must-revalidate'
-      : 'public, max-age=60'
+    'Cache-Control': ext === '.html' ? 'no-cache, no-store, must-revalidate' : 'public, max-age=60'
   };
-  if (ext === '.epub') {
-    headers['Content-Disposition'] = `attachment; filename="${path.basename(abs)}"`;
-  }
   res.writeHead(200, headers);
   res.end(body);
 }
@@ -755,15 +746,8 @@ async function handleBrowse(root, req, res, port) {
       return;
     }
     const dates = await listSummaryDates(root);
-    let hasEpub = false;
-    try {
-      await fs.stat(path.join(root, 'summaries', `${date}.epub`));
-      hasEpub = true;
-    } catch {
-      hasEpub = false;
-    }
     res.writeHead(200, { 'Content-Type': 'text/html; charset=utf-8' });
-    res.end(renderViewer(date, dates, { hasEpub }));
+    res.end(renderViewer(date, dates));
     return;
   }
 

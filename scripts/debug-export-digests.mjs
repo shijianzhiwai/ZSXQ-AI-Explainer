@@ -36,8 +36,7 @@ function parseArgs(argv) {
     skipOcr: false,
     skipVision: false,
     skipSummary: false,
-    skipHtml: false,
-    skipEpub: false
+    skipHtml: false
   };
 
   for (let i = 2; i < argv.length; i++) {
@@ -54,7 +53,6 @@ function parseArgs(argv) {
     if (argv[i] === '--skip-vision') args.skipVision = true;
     if (argv[i] === '--skip-summary') args.skipSummary = true;
     if (argv[i] === '--skip-html') args.skipHtml = true;
-    if (argv[i] === '--skip-epub') args.skipEpub = true;
   }
 
   args.slug = validateInboxSlug(args.slug);
@@ -130,7 +128,6 @@ async function runPipeline(args) {
   if (args.skipVision) pipelineArgs.push('--skip-vision');
   if (args.skipSummary) pipelineArgs.push('--skip-summary');
   if (args.skipHtml) pipelineArgs.push('--skip-html');
-  if (args.skipEpub) pipelineArgs.push('--skip-epub');
   await runNode('build-daily-pipeline.mjs', pipelineArgs);
 }
 

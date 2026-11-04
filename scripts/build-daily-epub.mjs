@@ -1,13 +1,12 @@
 #!/usr/bin/env node
 /**
  * Build a reflowable EPUB for e-ink readers from summary.json.
+ * Not part of the daily pipeline — run manually when needed.
  *
- *   node scripts/build-daily-epub.mjs
- *   node scripts/build-daily-epub.mjs --date 2026-10-20
  *   node scripts/build-daily-epub.mjs --days 7
+ *   node scripts/build-daily-epub.mjs --days 7 --out ~/Desktop/week.epub
  *   node scripts/build-daily-epub.mjs --since 2026-10-01 --until 2026-10-20
- *   node scripts/build-daily-epub.mjs --each
- *   node scripts/build-daily-epub.mjs --each --days 14
+ *   node scripts/build-daily-epub.mjs --date 2026-10-20
  *   node scripts/build-daily-epub.mjs --no-images
  */
 import fs from 'node:fs/promises';
@@ -20,15 +19,16 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const REPO_ROOT = path.resolve(__dirname, '..');
 
 const HELP = `Usage:
-  node scripts/build-daily-epub.mjs [--date YYYY-MM-DD | --slug name]
   node scripts/build-daily-epub.mjs --days 7
+  node scripts/build-daily-epub.mjs --days 7 --out ~/Desktop/week.epub
   node scripts/build-daily-epub.mjs --since YYYY-MM-DD [--until YYYY-MM-DD]
+  node scripts/build-daily-epub.mjs [--date YYYY-MM-DD | --slug name]
   node scripts/build-daily-epub.mjs --each [--days N | --since DATE]
-  node scripts/build-daily-epub.mjs --out path.epub
   node scripts/build-daily-epub.mjs --no-images
 
-One day (the default) writes summaries/YYYY-MM-DD.epub.
---days / --since write one book, newest day first.
+--days / --since write one book into summaries/zsxq-daily-*.epub (newest day first).
+--out overrides the output file (or directory with --each).
+One day (--date / default latest) writes summaries/YYYY-MM-DD.epub.
 --each writes one EPUB per day.`;
 
 function parseArgs(argv) {
